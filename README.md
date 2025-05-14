@@ -1,5 +1,7 @@
 # Chaotax
 
+## Ideally a better name, chaoticgym?, others?
+
 How do we define discrete or continuous actions, some discretisation scheme easily?
 Would be good to have a generative env
 Would be good to work with MARL and SARL
@@ -16,3 +18,5 @@ What envs do we provide:
 - Other fluidy things
 
 Check the PhD thesis to get a summary of all the envs
+
+Would be great to have a render option for all that can be done in eval stages, or perhaps some jittable gif saver?
