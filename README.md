@@ -22,3 +22,5 @@ What envs do we provide:
 Check the PhD thesis to get a summary of all the envs
 
 Would be great to have a render option for all that can be done in eval stages, or perhaps some jittable gif saver?
+
+Having some wrappers be ideal, for example some that normalise the env etc etc
