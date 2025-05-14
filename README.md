@@ -16,6 +16,8 @@ What envs do we provide:
 - KS Equation
 - Kuramoto Oscillator
 - Other fluidy things
+- N-Pendulum (aka like double pendulum and greater)
+- Three body problem
 
 Check the PhD thesis to get a summary of all the envs
 
