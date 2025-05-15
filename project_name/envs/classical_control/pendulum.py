@@ -27,7 +27,7 @@ class EnvParams(environment.EnvParams):
     length: float = 1.0
     horizon: int = 200
 
-class GymnaxPendulum(environment.Environment[EnvState, EnvParams]):
+class Pendulum(environment.Environment[EnvState, EnvParams]):
 
     def __init__(self):
         super().__init__()
