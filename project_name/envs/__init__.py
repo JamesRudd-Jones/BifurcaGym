@@ -6,18 +6,22 @@ from project_name.envs import (base_env,
                                multi_agent_control)
 from project_name.envs.discrete_time_chaos import logistic_map
 
-# Pendulum = classical_control.Pendulum
-# PilcoCartpole = classical_control.PilcoCartpole
+PendulumCSDA = classical_control.PendulumCSDA
+PendulumCSCA = classical_control.PendulumCSCA
+PilcoCartPoleCSDA = classical_control.PilcoCartPoleCSDA
+PilcoCartPoleCSCA = classical_control.PilcoCartPoleCSCA
 # WetChicken = classical_control.WetChicken
 LogisticMapDSDA = logistic_map.LogisticMapDSDA
 LogisticMapCSDA = logistic_map.LogisticMapCSDA
 LogisticMapCSCA = logistic_map.LogisticMapCSCA
 
 
-__all__ = ["LogisticMapDSDA",
+__all__ = ["PendulumCSDA",
+           "PendulumCSCA",
+           "PilcoCartPoleCSDA",
+           "PilcoCartPoleCSCA",
+           "LogisticMapDSDA",
            "LogisticMapCSDA",
            "LogisticMapCSCA",
-            #"Pendulum",
-           # "PilcoCartpole",
            # "WetChicken",
            ]

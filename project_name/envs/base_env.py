@@ -12,10 +12,6 @@ import jax.random as jrandom
 import abc
 
 
-# TEnvState = TypeVar("TEnvState", bound="EnvState")
-# TEnvParams = TypeVar("TEnvParams", bound="EnvParams")
-
-
 @struct.dataclass
 class EnvState:
     time: int
@@ -26,43 +22,30 @@ class BaseEnvironment(abc.ABC):  # object):
     def __init(self, **env_kwargs):
         pass
 
-    # @partial(jax.jit, static_argnums=(0,))
-    # def step(self,
-    #          key: chex.PRNGKey,
-    #          state: TEnvState,
-    #          action: Union[int, float, chex.Array]
-    #          ) -> Tuple[chex.Array, TEnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-    #     """Performs step transitions in the environment."""
-    #     key, key_reset = jrandom.split(key)
-    #     obs_st, state_st, reward, done, info = self.step_env(key, state, action)
-    #     obs_re, state_re = self.reset_env(key_reset)
-    #     # Auto-reset environment based on termination
-    #     state = jax.tree_map(lambda x, y: jax.lax.select(done, x, y), state_re, state_st)
-    #     obs = jax.lax.select(done, obs_re, obs_st)
-    #     return obs, state, reward, done, info
-    #
-    # @partial(jax.jit, static_argnums=(0,))
-    # def generative_step(self,
-    #                     key: chex.PRNGKey,
-    #                     gen_obs: chex.Array,
-    #                     action: Union[int, float, chex.Array]
-    #                     ) -> Tuple[chex.Array, TEnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-    #     """Performs generative step transition in the environment for some Model-Based RL approaches."""
-    #     key, key_reset = jrandom.split(key)
-    #     obs_st, state_st, reward, done, info = self.generative_step_env(key, gen_obs, action)
-    #     obs_re, state_re = self.reset_env(key_reset)
-    #     # Auto-reset environment based on termination
-    #     state = jax.tree_map(lambda x, y: jax.lax.select(done, x, y), state_re, state_st)
-    #     obs = jax.lax.select(done, obs_re, obs_st)
-    #     return obs, state, reward, done, info
-
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        """Performs resetting of environment."""
-        raise NotImplementedError
-
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
+             action: Union[int, float, chex.Array],
+             state: EnvState,
+             key: chex.PRNGKey,
+             ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+        obs, state, reward, done, info = self.step_env(action, state, key)
+        return obs, state, reward, done, info
+
+    @partial(jax.jit, static_argnums=(0,))
+    def generative_step(self,
+                        action: Union[int, float, chex.Array],
+                        gen_obs: chex.Array,
+                        key: chex.PRNGKey,
+                        ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+        obs, state, reward, done, info = self.generative_step_env(action, gen_obs, key)
+        return obs, state, reward, done, info
+
+    @partial(jax.jit, static_argnums=(0,))
+    def reset(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
+        obs, state = self.reset_env(key)
+        return obs, state
+
+    def step_env(self,
                  action: Union[int, float, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
@@ -70,13 +53,16 @@ class BaseEnvironment(abc.ABC):  # object):
         """Environment-specific step transition."""
         raise NotImplementedError
 
-    @partial(jax.jit, static_argnums=(0,))
-    def generative_step(self,
+    def generative_step_env(self,
                             action: Union[int, float, chex.Array],
                             gen_obs: chex.Array,
                             key: chex.PRNGKey,
                             ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         """Environment-specific step transition."""
+        raise NotImplementedError
+
+    def reset_env(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
+        """Environment-specific reset."""
         raise NotImplementedError
 
     @partial(jax.jit, static_argnums=(0,))
@@ -88,7 +74,7 @@ class BaseEnvironment(abc.ABC):  # object):
         """Environment-specific reward function."""
         raise NotImplementedError
 
-    def render_env(self, state: EnvState, key: chex.PRNGKey):
+    def render(self, state: EnvState):
         """Environment-specific reset."""
         raise NotImplementedError
 
