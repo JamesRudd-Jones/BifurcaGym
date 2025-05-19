@@ -1,5 +1,3 @@
-import numpy as np
-from os import path
 import jax.numpy as jnp
 import jax.random as jrandom
 from project_name.envs import base_env
@@ -16,7 +14,7 @@ class EnvState(base_env.EnvState):
     time: int
     
 
-class LogisticMap(base_env.BaseEnvironment):
+class LogisticMapDSDA(base_env.BaseEnvironment):
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
@@ -25,23 +23,24 @@ class LogisticMap(base_env.BaseEnvironment):
         # init_r: float = 3.1
         self.init_r: float = 3.8
         # init_r: float = 4.0
+
         # fixed_point: float = 0.6  # for r = 2.5; period 1
         # fixed_point: float = 0.55801  # for r = 3.1; period 2
         # fixed_point: float = 0.76457  # for r = 3.1; period 2
         # fixed_point: float = 0.67742  # for r = 3.1; period 1
-        self.fixed_point: float = 0.737  # for r = 3.8; chaotic
-        # fixed_point: float = 0.xxx  # for r = 4.0; chaotic
+        # self.fixed_point: float = 0.737  # for r = 3.8; chaotic
 
-        self.reward_ball: float = 0.001  # 0.0025  # 0.005
-        # reward_ball: float = 0.01  # 0.0025  # 0.005
+        self.fixed_point: float = (self.init_r - 1) / self.init_r
+        # TODO a calc for period fixed point but be good to generalise to more
+
+        self.reward_ball: float = 0.001
         self.max_control: float = 0.1
         self.horizon: int = 200
-        self.start_point: float = 0.1
         self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
         self.discretisation = 100 + 1
         self.ref_vector: jnp.ndarray = jnp.linspace(0, 1, self.discretisation)
-        self.discrete_action: bool = True
 
+        self.start_point: float = 0.1
         self.random_start: bool = True
         self.random_start_range_lower: float = 0.0
         self.random_start_range_upper: float = 1.0
@@ -51,23 +50,19 @@ class LogisticMap(base_env.BaseEnvironment):
                  state: EnvState,
                  key: chex.PRNGKey,
                  ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        action = self._action_convert(input_action)
+        action = self._action_convert(input_action).squeeze()
 
         new_x = (action + self.init_r) * state.x * (1 - state.x)
 
-        reward = -jnp.abs(new_x - self.fixed_point) ** 2  # TODO can set more specific norm distances
+        reward = self.reward_func(state.x, new_x, key)
 
-        done = jax.lax.select(jnp.abs(new_x - self.fixed_point) < self.reward_ball, jnp.array((True,)), jnp.array((False,)))
-
-        state = EnvState(x=new_x.squeeze(), time=state.time+1)
-
-        delta_s = jnp.zeros(1,)  # TODO add in some delta s value
+        state = EnvState(x=new_x, time=state.time+1)
 
         return (jax.lax.stop_gradient(self.get_obs(state)),
                 jax.lax.stop_gradient(state),
                 reward,
-                done,
-                {"delta_obs": delta_s})
+                self.is_done(state),
+                {})
 
     def generative_step_env(self,
                             action: Union[int, float, chex.Array],
@@ -78,7 +73,7 @@ class LogisticMap(base_env.BaseEnvironment):
         return self.step(action, state, key)
 
     def _action_convert(self, input_action):
-        return input_action
+        return self.action_array[input_action] * self.max_control
 
     def reward_func(self,
                     x_t: chex.Array,
@@ -88,7 +83,7 @@ class LogisticMap(base_env.BaseEnvironment):
         """
         As per the paper titled: Optimal chaos control through reinforcement learning
         """
-        reward = jax.lax.select(x_t == x_tp1, jnp.zeros(1,), -jnp.ones(1,))
+        reward = -jnp.abs(x_tp1 - self.fixed_point) ** 2  # TODO can set more specific norm distances
         return reward
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -104,21 +99,6 @@ class LogisticMap(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    @property
-    def name(self) -> str:
-        """Environment name."""
-        return "LogisticMap-v0"
-
-    # TODO add in state space
-
-
-class LogisticMapDSDA(LogisticMap):
-    def __init__(self, **env_kwargs):
-        super().__init__(**env_kwargs)
-
-    def _action_convert(self, input_action):
-        return self.action_array[input_action] * self.max_control
-
     def projection(self, s):
         # TODO only for 1d atm
         s = jnp.repeat(s, self.ref_vector.shape[0])
@@ -128,28 +108,30 @@ class LogisticMapDSDA(LogisticMap):
     def get_obs(self, state: EnvState, key=None) -> chex.Array:
         return self.projection(state.x)
 
+    def is_done(self, state: EnvState) -> jnp.ndarray:
+        return jax.lax.select(jnp.abs(state.x - self.fixed_point) < self.reward_ball,
+                              jnp.array((True,)),
+                              jnp.array((False,)))
+
+    @property
+    def name(self) -> str:
+        return "LogisticMap-v0"
+
     def action_space(self) -> spaces.Discrete:
-        """Action space of the environment."""
         return spaces.Discrete(len(self.action_array))
 
     def observation_space(self) -> spaces.Discrete:
-        """Observation space of the environment."""
         return spaces.Discrete(self.discretisation)
 
+    # TODO add in state space
 
-class LogisticMapCSDA(LogisticMap):
+
+class LogisticMapCSDA(LogisticMapDSDA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-    def _action_convert(self, input_action):
-        return self.action_array[input_action] * self.max_control
-
     def get_obs(self, state: EnvState, key=None) -> chex.Array:
         return state.x
-
-    def action_space(self) -> spaces.Discrete:
-        """Action space of the environment."""
-        return spaces.Discrete(1)
 
     def observation_space(self) -> spaces.Box:
         """Observation space of the environment."""

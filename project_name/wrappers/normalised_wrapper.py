@@ -67,7 +67,8 @@ class NormalisedEnvCSDA(object):
         """Observation space of the environment."""
         return spaces.Box(low=-jnp.ones_like(self.unnorm_observation_space.low,),
                           high=jnp.ones_like(self.unnorm_observation_space.high,),
-                          shape=self.unnorm_observation_space.shape)
+                          shape=self.unnorm_observation_space.shape,
+                          dtype=self.unnorm_observation_space.dtype)
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -160,7 +161,7 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
 
     def action_space(self) -> spaces.Box:
         """Action space of the environment."""
-        return spaces.Box(low=-1, high=1, shape=self.unnorm_action_space.shape)
+        return spaces.Box(low=-1, high=1, shape=self.unnorm_action_space.shape, dtype=self.unnorm_action_space.dtype)
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,

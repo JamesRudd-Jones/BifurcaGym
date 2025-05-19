@@ -14,10 +14,10 @@ import time
 import itertools
 
 
-env_names = ["LogisticMap-v0",
+env_names = ["KS-v0",
              ]
-cont_state = [True, False]
-cont_action = [True, False]
+cont_state = [True]#, False]
+cont_action = [True]#, False]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 
@@ -47,7 +47,6 @@ class TestEnv:
                 for _ in range(self.num_steps):
                     key, _key = jrandom.split(key)
                     action = env.action_space().sample(_key)
-
                     key, _key = jrandom.split(key)
                     obs, state, reward, done_jax, _ = env.step(action, state, _key)
 
@@ -74,7 +73,13 @@ class TestEnv:
 
                     key, _key = jrandom.split(key)
                     # TODO a bit dodgy as the state.x may change, not sure how to generalise atm
-                    gen_step_obs, gen_step_state, gen_step_reward, gen_step_done, _ = env.generative_step(action, state.x, _key)
+                    # gen_step_obs, gen_step_state, gen_step_reward, gen_step_done, _ = env.generative_step(action,
+                    #                                                                                       jnp.array((state.x, state.y)),
+                    #                                                                                       _key)
+                    gen_step_obs, gen_step_state, gen_step_reward, gen_step_done, _ = env.generative_step(action,
+                                                                                                          state.u,
+                                                                                                          # state.x
+                                                                                                          _key)
                     step_obs, state, step_reward, step_done, _ = env.step(action, state, _key)
 
                     if obs.dtype == jnp.int32 or obs.dtype == jnp.int64:

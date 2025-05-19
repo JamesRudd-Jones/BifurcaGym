@@ -29,8 +29,8 @@ class AutoResetWrapper(object):
              state: EnvState,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        key, key_reset = jrandom.split(key)
         obs_st, state_st, reward, done, info = self._wautoreset_env.step(action, state, key)
+        key, key_reset = jrandom.split(key)
         obs_re, state_re = self._wautoreset_env.reset(key_reset)
         # Auto-reset environment based on termination
         state = jax.tree.map(lambda x, y: jax.lax.select(done, x, y), state_re, state_st)
@@ -43,8 +43,8 @@ class AutoResetWrapper(object):
                         gen_obs: chex.Array,
                         key: chex.PRNGKey,
                         ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        key, key_reset = jrandom.split(key)
         obs_st, state_st, reward, done, info = self._wautoreset_env.generative_step(action, gen_obs, key)
+        key, key_reset = jrandom.split(key)
         obs_re, state_re = self._wautoreset_env.reset(key_reset)
         # Auto-reset environment based on termination
         state = jax.tree.map(lambda x, y: jax.lax.select(done, x, y), state_re, state_st)
