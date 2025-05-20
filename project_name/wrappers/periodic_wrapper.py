@@ -46,8 +46,8 @@ class PeriodicEnv(object):
                         key: chex.PRNGKey,
                         ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         obs, new_env_state, rew, done, info = self._wperiodic_env.generative_step(action,
-                                                                                           input_obs,
-                                                                                           key)
+                                                                                  input_obs,
+                                                                                  key)
 
         shifted_output_og = obs - self._wperiodic_env.observation_space().low
         obs_range = self._wperiodic_env.observation_space().high - self._wperiodic_env.observation_space().low
@@ -55,6 +55,8 @@ class PeriodicEnv(object):
         modded_output = shifted_output_og + (self._wperiodic_env.periodic_dim * shifted_output) - (
                 self._wperiodic_env.periodic_dim * shifted_output_og)
         wrapped_output = modded_output + self._wperiodic_env.observation_space().low
+
+        # TODO this adds in some error accumulation, can we avoid this?
 
         return wrapped_output, new_env_state, rew, done, info
 

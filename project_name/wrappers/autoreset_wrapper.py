@@ -13,9 +13,12 @@ from project_name.envs.base_env import EnvState
 class AutoResetWrapper(object):
     def __init__(self, wautoreset_env):
         """
-        Automatically resets envs that are done
+        Automatically resets envs that are done, greatly inspired by the following from Gymnax
+        https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/environment.py
+
+        Also taking insight from Brax:
+        https://github.com/google/brax/blob/main/brax/envs/wrappers/training.py
         """
-        # TODO add inspiration from Brax for this (and maybe gymnax)
 
         self._wautoreset_env = wautoreset_env
 

@@ -1,5 +1,5 @@
 """
-Abstract base env for all further Environments
+Abstract base env for all further environments
 """
 
 from functools import partial
@@ -27,7 +27,7 @@ class BaseEnvironment(abc.ABC):  # object):
              action: Union[int, float, chex.Array],
              state: EnvState,
              key: chex.PRNGKey,
-             ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+             ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         obs, state, reward, done, info = self.step_env(action, state, key)
         return obs, state, reward, done, info
 
@@ -36,7 +36,7 @@ class BaseEnvironment(abc.ABC):  # object):
                         action: Union[int, float, chex.Array],
                         gen_obs: chex.Array,
                         key: chex.PRNGKey,
-                        ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                        ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         obs, state, reward, done, info = self.generative_step_env(action, gen_obs, key)
         return obs, state, reward, done, info
 
@@ -49,40 +49,37 @@ class BaseEnvironment(abc.ABC):  # object):
                  action: Union[int, float, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        """Environment-specific step transition."""
+                ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         raise NotImplementedError
 
     def generative_step_env(self,
                             action: Union[int, float, chex.Array],
                             gen_obs: chex.Array,
                             key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        """Environment-specific step transition."""
+                            ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         raise NotImplementedError
 
     def reset_env(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
-        """Environment-specific reset."""
         raise NotImplementedError
 
-    @partial(jax.jit, static_argnums=(0,))
     def reward_func(self,
-                    x_t: chex.Array,
-                    x_tp1: chex.Array,
+                    input_action_t: Union[int, float, chex.Array],
+                    state_t: EnvState,
+                    state_tp1: EnvState,
                     key: chex.PRNGKey,
-                    )-> chex.Array:  # TODO is it an array idk?
-        """Environment-specific reward function."""
+                    )-> chex.Array:
+        # TODO this is needed for discrete actions as we may pass actions from outside the env
+        # TODO potential issues are any keyed random process added to the action as this may not travel to rewards correctly
+
         raise NotImplementedError
 
     def render(self, state: EnvState):
-        """Environment-specific reset."""
         raise NotImplementedError
 
     @overload
     def get_obs(self,
                 state: EnvState,
                 ) -> chex.Array:
-        """Applies observation function to state."""
         raise NotImplementedError
 
     @overload
@@ -90,40 +87,26 @@ class BaseEnvironment(abc.ABC):  # object):
                 state: EnvState,
                 key: chex.PRNGKey
                 ) -> chex.Array:
-        """Applies observation function to state."""
         raise NotImplementedError
 
     def get_obs(self,
                 state,
                 key=None
                 ) -> chex.Array:
-        """Applies observation function to state."""
         raise NotImplementedError
 
-    @partial(jax.jit, static_argnums=(0,))
-    def is_done(self, state: EnvState) -> jnp.ndarray:
-        """Check whether state transition is done."""
+    def is_done(self, state: EnvState) -> chex.Array:
         raise NotImplementedError
 
-    @partial(jax.jit, static_argnums=(0,))
-    def discount(self, state: EnvState) -> jnp.ndarray:
-        """Return a discount of zero if the episode has terminated."""
+    def discount(self, state: EnvState) -> chex.Array:
         return jax.lax.select(self.is_done(state), 0.0, 1.0)
 
     @property
     def name(self) -> str:
-        """Environment name."""
         return type(self).__name__
 
     def action_space(self):
-        """Action space of the environment."""
         raise NotImplementedError
 
     def observation_space(self):
-        """Observation space of the environment."""
         raise NotImplementedError
-
-    # def state_space(self):
-    #     """State space of the environment."""
-    #     raise NotImplementedError
-    # TODO do we need to define the above idk

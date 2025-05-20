@@ -54,14 +54,14 @@ class HenonMapDSDA(base_env.BaseEnvironment):
 
         new_y = (self.init_b + action[1]) * state.x
 
-        reward = self.reward_func(jnp.array((state.x, state.y)), jnp.array((new_x, new_y)), key)
+        new_state = EnvState(x=new_x, y=new_y, time=state.time+1)
 
-        state = EnvState(x=new_x, y=new_y, time=state.time+1)
+        reward = self.reward_func(input_action, state, new_state, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(state)),
-                jax.lax.stop_gradient(state),
+        return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(state),
+                self.is_done(new_state),
                 {})
 
     def generative_step_env(self,
@@ -76,11 +76,13 @@ class HenonMapDSDA(base_env.BaseEnvironment):
         return self.action_array[input_action] * self.max_control
 
     def reward_func(self,
-                    x_t: chex.Array,
-                    x_tp1: chex.Array,
+                    input_action_t: Union[int, float, chex.Array],
+                    state_t: EnvState,
+                    state_tp1: EnvState,
                     key: chex.PRNGKey,
                     ) -> chex.Array:
-        reward = -jnp.linalg.norm(x_tp1 - self.fixed_point, 2)  # TODO can set more specific norm distances
+        reward = -jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point, 2)
+        # the above can set more specific norm distances
         return reward
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -101,7 +103,6 @@ class HenonMapDSDA(base_env.BaseEnvironment):
         return self.get_obs(state), state
 
     def projection(self, s):
-        # TODO only for 1d atm
         s = jnp.repeat(s, self.ref_vector.shape[0])
         inter = jnp.abs(self.ref_vector - s)
         return jnp.argmin(inter)
@@ -128,8 +129,6 @@ class HenonMapDSDA(base_env.BaseEnvironment):
     def observation_space(self) -> spaces.Discrete:
         """Observation space of the environment."""
         return spaces.Discrete(self.discretisation)
-
-    # TODO add in state space
 
 
 class HenonMapCSDA(HenonMapDSDA):

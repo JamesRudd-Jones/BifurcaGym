@@ -1,10 +1,6 @@
 """
-Based off: https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_control/cartpole.py
-
-Converted to be like Pilco cartpole
-
+Based off: https://github.com/fusion-ml/trajectory-information-rl/blob/main/barl/envs/pilco_cartpole.py
 """
-# TODO update the abov for true origins
 
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -12,7 +8,6 @@ from typing import Any, Dict, Optional, Tuple, Union
 import chex
 from flax import struct
 import jax
-from jax import lax
 import jax.numpy as jnp
 from project_name.envs import base_env
 from gymnax.environments import spaces
@@ -71,32 +66,22 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
         x_dot = state.x_dot + xdot_update * self.dt
         theta_dot = state.theta_dot + thetadot_update * self.dt
 
-        # compute costs - saturation cost
-        goal = jnp.array([0.0, self.length])
-        pole_x = self.length * jnp.sin(theta)
-        pole_y = self.length * jnp.cos(theta)
-        position = jnp.array([state.x + pole_x, pole_y])
-        squared_distance = jnp.sum((position - goal) ** 2)
-        squared_sigma = 0.25 ** 2
-        costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
-
         delta_s = jnp.array((x, x_dot, unnorm_theta, theta_dot)) - self.get_obs(state)
 
         # Update state dict and evaluate termination conditions
-        state = EnvState(x=x,
-                         x_dot=x_dot,
-                         theta=theta,
-                         theta_dot=theta_dot,
-                         time=state.time + 1)
+        new_state = EnvState(x=x,
+                             x_dot=x_dot,
+                             theta=theta,
+                             theta_dot=theta_dot,
+                             time=state.time + 1)
 
-        # done = self.is_terminal(state, self)
-        done = jnp.array(False)  # TODO apparently always false
+        reward = self.reward_func(input_action, state, new_state, key)
 
-        return (lax.stop_gradient(self.get_obs(state)),
-                lax.stop_gradient(state),
-                jnp.array(-costs),
-                done,
-                {"discount": self.discount(state, self),
+        return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(new_state),
+                reward,
+                self.is_done(new_state),
+                {"discount": self.discount(new_state),
                  "delta_obs": delta_s})
 
     def generative_step_env(self,
@@ -104,8 +89,8 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
                             obs: chex.Array,
                             key: chex.PRNGKey,
                             ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        state = EnvState(x=obs[0], x_dot=obs[1], theta=obs[2], theta_dot=obs[3], time=0)
-        return self.step(key, state, action)
+        state = EnvState(x=obs[0], x_dot=obs[1], theta=self._angle_normalise(obs[2]), theta_dot=obs[3], time=0)
+        return self.step(action, state, key)
 
     def _action_convert(self, input_action):
         return self.action_array[input_action] * self.force_mag
@@ -114,24 +99,20 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
     def _angle_normalise(x):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
-    def _get_pole_pos(self, x):
-        xpos = x[..., 0]
-        theta = x[..., 2]
-        pole_x = self.length * jnp.sin(theta)
-        pole_y = self.length * jnp.cos(theta)
-        position = jnp.array([xpos + pole_x, pole_y]).T
-        return position
-
     def reward_func(self,
-                    x_t: chex.Array,
-                    x_tp1: chex.Array,
+                    input_action_t: Union[int, float, chex.Array],
+                    state_t: EnvState,
+                    state_tp1: EnvState,
                     key: chex.PRNGKey,
                     ) -> chex.Array:
-        position = self._get_pole_pos(x_tp1)
         goal = jnp.array([0.0, self.length])
-        squared_distance = jnp.sum((position - goal) ** 2, axis=-1)
+        pole_x = self.length * jnp.sin(state_tp1.theta)
+        pole_y = self.length * jnp.cos(state_tp1.theta)
+        position = jnp.array([state_tp1.x + pole_x, pole_y])
+        squared_distance = jnp.sum((position - goal) ** 2)
         squared_sigma = 0.25 ** 2
         costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
+
         return -costs
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -146,23 +127,22 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
         return self.get_obs(state), state
 
     def get_obs(self, state: EnvState, key=None) -> chex.Array:
-        """Applies observation function to state."""
         # TODO if self.use_trig then it is the below
         # return jnp.array([state.x, state.x_dot, jnp.sin(state.theta), jnp.cos(state.theta), state.theta_dot])
         # Otherwise
         return jnp.array([state.x, state.x_dot, state.theta, state.theta_dot])
 
+    def is_done(self, state: EnvState) -> chex.Array:
+        return jnp.array(False)
+
     @property
     def name(self) -> str:
-        """Environment name."""
         return "PilcoCartPole-v0"
 
     def action_space(self) -> spaces.Discrete:
-        """Action space of the environment."""
         return spaces.Discrete(len(self.action_array))
 
     def observation_space(self) -> spaces.Box:
-        """Observation space of the environment."""
         high = jnp.array([10.0, 10.0, 3.14159, 25.0])
         return spaces.Box(-high, high, (4,), dtype=jnp.float32)
 
@@ -175,5 +155,4 @@ class PilcoCartPoleCSCA(PilcoCartPoleCSDA):
         return jnp.clip(input_action, -1, 1)[0] * self.force_mag
 
     def action_space(self) -> spaces.Box:
-        """Action space of the environment."""
         return spaces.Box(-1, 1, shape=(1,))

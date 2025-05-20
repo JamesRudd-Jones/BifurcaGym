@@ -24,3 +24,9 @@ Check the PhD thesis to get a summary of all the envs
 Would be great to have a render option for all that can be done in eval stages, or perhaps some jittable gif saver?
 
 Having some wrappers be ideal, for example some that normalise the env etc etc
+
+
+# TODOs
+
+Update all reward functions to be separate and take in state and new_state so can be used with a model-based setup
+Should we have state space and observation space as well?

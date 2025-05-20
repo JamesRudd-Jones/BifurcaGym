@@ -9,12 +9,6 @@ AutoResetWrapper = autoreset_wrapper.AutoResetWrapper
 DeltaObsWrapper = deltaobs_wrapper.DeltaObsEnv
 NormalisedWrapperCSCA = normalised_wrapper.NormalisedEnvCSCA
 NormalisedWrapperCSDA = normalised_wrapper.NormalisedEnvCSDA
+NormalisedWrapperDeltaObsCSCA = normalised_wrapper.NormalisedEnvDeltaObsCSCA
+NormalisedWrapperDeltaObsCSDA = normalised_wrapper.NormalisedEnvDeltaObsCSDA
 PeriodicWrapper = periodic_wrapper.PeriodicEnv
-
-
-__all__ = ["AutoResetWrapper",
-           "DeltaObsWrapper",
-           "NormalisedWrapperCSCA",
-           "NormalisedWrapperCSDA",
-           "PeriodicWrapper",
-           ]

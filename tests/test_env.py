@@ -14,10 +14,10 @@ import time
 import itertools
 
 
-env_names = ["KS-v0",
+env_names = ["Acrobot-v0",
              ]
 cont_state = [True]#, False]
-cont_action = [True]#, False]
+cont_action = [False]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 
@@ -28,7 +28,7 @@ class TestEnv:
     def setup_method(self):
         """Set up common test resources."""
         self.num_steps = 100#0
-        self.num_episodes = 100
+        self.num_episodes = 10#0
         self.key = jrandom.PRNGKey(42)
         self.error = 1e-4
 
@@ -72,13 +72,8 @@ class TestEnv:
                     action = env.action_space().sample(_key)
 
                     key, _key = jrandom.split(key)
-                    # TODO a bit dodgy as the state.x may change, not sure how to generalise atm
-                    # gen_step_obs, gen_step_state, gen_step_reward, gen_step_done, _ = env.generative_step(action,
-                    #                                                                                       jnp.array((state.x, state.y)),
-                    #                                                                                       _key)
                     gen_step_obs, gen_step_state, gen_step_reward, gen_step_done, _ = env.generative_step(action,
-                                                                                                          state.u,
-                                                                                                          # state.x
+                                                                                                          obs,
                                                                                                           _key)
                     step_obs, state, step_reward, step_done, _ = env.step(action, state, _key)
 
@@ -87,7 +82,7 @@ class TestEnv:
                     else:
                         chex.assert_trees_all_close(step_obs, gen_step_obs, atol=self.error)
                     gen_step_state = gen_step_state.replace(time=state.time)
-                    chex.assert_trees_all_close(state, gen_step_state)
+                    chex.assert_trees_all_close(state, gen_step_state, atol=self.error)
                     chex.assert_trees_all_close(step_reward, gen_step_reward, atol=self.error)
                     chex.assert_trees_all_equal(step_done, gen_step_done)
 

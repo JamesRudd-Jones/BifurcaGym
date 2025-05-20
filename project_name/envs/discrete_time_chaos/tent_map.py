@@ -44,14 +44,14 @@ class TentMapDSDA(base_env.BaseEnvironment):
 
         new_x = (action + self.init_mu) * jnp.min(jnp.array((state.x, 1 - state.x)))
 
-        reward = self.reward_func(state.x, new_x, key)
+        new_state = EnvState(x=new_x, time=state.time+1)
 
-        state = EnvState(x=new_x, time=state.time+1)
+        reward = self.reward_func(input_action, state, new_state, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(state)),
-                jax.lax.stop_gradient(state),
+        return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(state),
+                self.is_done(new_state),
                 {})
 
     def generative_step_env(self,
@@ -66,14 +66,16 @@ class TentMapDSDA(base_env.BaseEnvironment):
         return self.action_array[input_action] * self.max_control
 
     def reward_func(self,
-                    x_t: chex.Array,
-                    x_tp1: chex.Array,
+                    input_action_t: Union[int, float, chex.Array],
+                    state_t: EnvState,
+                    state_tp1: EnvState,
                     key: chex.PRNGKey,
                     ) -> chex.Array:
         """
         As per the paper titled: Optimal chaos control through reinforcement learning
         """
-        reward = -jnp.abs(x_tp1 - self.fixed_point) ** 2  # TODO can set more specific norm distances
+        reward = -jnp.abs(state_tp1.x - self.fixed_point) ** 2
+        # The above can set more specific norm distances
         return reward
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -90,7 +92,6 @@ class TentMapDSDA(base_env.BaseEnvironment):
         return self.get_obs(state), state
 
     def projection(self, s):
-        # TODO only for 1d atm
         s = jnp.repeat(s, self.ref_vector.shape[0])
         inter = jnp.abs(self.ref_vector - s)
         return jnp.argmin(inter, keepdims=True)
@@ -100,8 +101,8 @@ class TentMapDSDA(base_env.BaseEnvironment):
 
     def is_done(self, state: EnvState) -> jnp.ndarray:
         return jax.lax.select(jnp.abs(state.x - self.fixed_point) < self.reward_ball,
-                              jnp.array((True,)),
-                              jnp.array((False,)))
+                              jnp.array(True),
+                              jnp.array(False))
 
     @property
     def name(self) -> str:
@@ -115,8 +116,6 @@ class TentMapDSDA(base_env.BaseEnvironment):
     def observation_space(self) -> spaces.Discrete:
         """Observation space of the environment."""
         return spaces.Discrete(self.discretisation)
-
-    # TODO add in state space
 
 
 class TentMapCSDA(TentMapDSDA):

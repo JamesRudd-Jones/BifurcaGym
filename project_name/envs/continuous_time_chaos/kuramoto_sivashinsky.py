@@ -91,15 +91,15 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         final_runner_state = jax.lax.scan(_runge_kutta_update, (u_K, 0), None, 3)
         u_S = jnp.fft.irfft(final_runner_state[0][0], axis=-1)
 
-        reward = self.reward_func(state.u, u_S, key)
-
-        state = EnvState(u=u_S,
+        new_state = EnvState(u=u_S,
                          time=state.time + 1)
 
-        return (jax.lax.stop_gradient(self.get_obs(state)),
-                jax.lax.stop_gradient(state),
+        reward = self.reward_func(input_action, state, new_state, key)
+
+        return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(state),
+                self.is_done(new_state),
                 {})
 
     def generative_step_env(self,
@@ -111,11 +111,12 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         return self.step(action, state, key)
 
     def reward_func(self,
-                    x_t: chex.Array,
-                    x_tp1: chex.Array,
+                    input_action_t: Union[int, float, chex.Array],
+                    state_t: EnvState,
+                    state_tp1: EnvState,
                     key: chex.PRNGKey,
                     ) -> chex.Array:
-        reward = -jnp.linalg.norm(x_tp1 - self.U_bf)
+        reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
         return reward
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
