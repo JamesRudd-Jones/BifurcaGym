@@ -62,12 +62,12 @@ class BaseEnvironment(abc.ABC):  # object):
     def reset_env(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
         raise NotImplementedError
 
-    def reward_func(self,
-                    input_action_t: Union[int, float, chex.Array],
-                    state_t: EnvState,
-                    state_tp1: EnvState,
-                    key: chex.PRNGKey,
-                    )-> chex.Array:
+    def reward_function(self,
+                        input_action_t: Union[int, float, chex.Array],
+                        state_t: EnvState,
+                        state_tp1: EnvState,
+                        key: chex.PRNGKey,
+                        )-> chex.Array:
         # TODO this is needed for discrete actions as we may pass actions from outside the env
         # TODO potential issues are any keyed random process added to the action as this may not travel to rewards correctly
 
