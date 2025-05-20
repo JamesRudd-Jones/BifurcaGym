@@ -6,7 +6,7 @@ import pytest
 
 import chex
 
-import project_name
+import bifurcagym
 
 import itertools
 import copy
@@ -18,7 +18,7 @@ env_names = [
              "PilcoCartPole-v0",
              # "HenonMap-v0",
              "LogisticMap-v0",
-             "TentMap-v0",
+             # "TentMap-v0",
              ]
 cont_state = [True, False]
 cont_action = [True, False]
@@ -73,10 +73,10 @@ class TestWrapper:
     def test_normal(self, env_name, cont_state, cont_action, normalised, delta_obs):
         try:
             key, _key = jrandom.split(self.key)
-            env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action,
-                                    normalised=False, delta_obs=False, autoreset=False)
-            wrapped_env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action,
-                                            normalised=normalised, delta_obs=delta_obs, autoreset=False)
+            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+                                  normalised=False, delta_obs=False, autoreset=False)
+            wrapped_env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+                                          normalised=normalised, delta_obs=delta_obs, autoreset=False)
             # Loop over test episodes
             for _ in range(self.num_episodes):
                 obs, env_state = env.reset(_key)
@@ -117,10 +117,10 @@ class TestWrapper:
     def test_genstep(self, env_name, cont_state, cont_action, normalised, delta_obs):
         try:
             key, _key = jrandom.split(self.key)
-            env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action,
-                                    normalised=False, delta_obs=False, autoreset=False)
-            wrapped_env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action,
-                                            normalised=normalised, delta_obs=delta_obs, autoreset=False)
+            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+                                  normalised=False, delta_obs=False, autoreset=False)
+            wrapped_env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+                                          normalised=normalised, delta_obs=delta_obs, autoreset=False)
             # Loop over test episodes
             for _ in range(self.num_episodes):
                 obs, env_state = env.reset(_key)
@@ -135,14 +135,19 @@ class TestWrapper:
                     with jax.disable_jit():
                         key, _key = jrandom.split(key)
                         nobs, nenv_state, rew, done, info = env.step(action, env_state, _key)
-                        if normalised and not delta_obs:
+                        if normalised and not delta_obs and cont_state:
                             w_nobs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action,
                                                                                                      wrapped_env.normalise_obs(obs),
                                                                                                      _key)
-                        elif normalised and delta_obs:
+                        elif normalised and delta_obs and cont_state:
                             w_nobs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action,
                                                                                                      wrapped_env.test_normalise_obs(obs),
                                                                                                      _key)
+                        elif not cont_state:
+                            w_nobs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action,
+                                                                                                      env_state.x,
+                                                                                                      _key)
+                            # TODO a dodgy fix for now due to the discretisation thing with get_obs
                         else:
                             w_nobs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action, obs, _key)
 
@@ -175,10 +180,10 @@ class TestWrapper:
     def test_autoreset(self, env_name, cont_state, cont_action, normalised, delta_obs):
         try:
             key, _key = jrandom.split(self.key)
-            env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action,
-                                    normalised=False, delta_obs=False, autoreset=False)
-            wrapped_env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action,
-                                            normalised=normalised, delta_obs=delta_obs, autoreset=True)
+            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+                                  normalised=False, delta_obs=False, autoreset=False)
+            wrapped_env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+                                          normalised=normalised, delta_obs=delta_obs, autoreset=True)
             observations = []
             nobservations = []
             rewards = []

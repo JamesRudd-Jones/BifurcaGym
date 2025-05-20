@@ -2,9 +2,16 @@
 
 ## Ideally a better name, chaoticgym?, others?
 
+Current envs that work:
+- Pendulum
+- Pilco Cartpole
+- Logistic Map
+
 How do we define discrete or continuous actions, some discretisation scheme easily?
-Would be good to have a generative env
-Would be good to work with MARL and SARL
+Good to explain that here
+
+Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
+
 What is the reward schema, is it controlling chaos or else, maybe easily adjustable by having a sep reward func, also good for model-based rl
 
 What envs do we provide:
