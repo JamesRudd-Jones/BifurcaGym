@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 import numpy as np
-from project_name.envs import base_env
+from bifurcagym.envs import base_env
 from gymnax.environments import spaces
 from flax import struct
 from typing import Any, Dict, Optional, Tuple, Union
@@ -23,8 +23,8 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.x: jnp.ndarray = jnp.array(np.loadtxt("../project_name/envs/continuous_time_chaos/ks_files/x.dat"))  # select space discretization of the target solution
-        self.U_bf: jnp.ndarray = jnp.array(np.loadtxt('../project_name/envs/continuous_time_chaos/ks_files/u2.dat'))  # select u1, u2 or u3 as target solution
+        self.x: jnp.ndarray = jnp.array(np.loadtxt("../bifurcagym/envs/continuous_time_chaos/ks_files/x.dat"))  # select space discretization of the target solution
+        self.U_bf: jnp.ndarray = jnp.array(np.loadtxt('../bifurcagym/envs/continuous_time_chaos/ks_files/u2.dat'))  # select u1, u2 or u3 as target solution
 
         self.max_control: float = 0.1
         self.horizon: int = 200
@@ -120,7 +120,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         return reward
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        u_S = jnp.array(np.loadtxt('../project_name/envs/continuous_time_chaos/ks_files/u3.dat'))
+        u_S = jnp.array(np.loadtxt('../bifurcagym/envs/continuous_time_chaos/ks_files/u3.dat'))
         state = EnvState(u=u_S,
                          time=0)  # TODO is this okay?
         return self.get_obs(state), state

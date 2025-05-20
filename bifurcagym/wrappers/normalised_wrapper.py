@@ -6,8 +6,8 @@ import jax
 from functools import partial
 import chex
 from typing import Any, Dict, Generic, Optional, Tuple, TypeVar, Union, overload
-from project_name.envs import base_env
-from project_name.envs.base_env import EnvState
+from bifurcagym.envs import base_env
+from bifurcagym.envs.base_env import EnvState
 
 
 # def make_normalised_plot_fn(norm_env, env_params, plot_fn):

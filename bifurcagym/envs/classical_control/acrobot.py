@@ -2,7 +2,7 @@ import numpy as np
 from os import path
 import jax.numpy as jnp
 import jax.random as jrandom
-from project_name.envs import base_env, utils
+from bifurcagym.envs import base_env, utils
 from gymnax.environments import spaces
 from flax import struct
 from typing import Any, Dict, Optional, Tuple, Union

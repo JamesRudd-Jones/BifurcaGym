@@ -1,22 +1,22 @@
-from project_name.envs.classical_control import (acrobot,
-                                                 pendulum,
-                                                 pilco_cartpole,
-                                                 wet_chicken)
+from bifurcagym.envs.classical_control import (acrobot,
+                                               pendulum,
+                                               pilco_cartpole,
+                                               wet_chicken)
 
-from project_name.envs.continuous_time_chaos import (kuramoto_sivashinsky)
+from bifurcagym.envs.continuous_time_chaos import (kuramoto_sivashinsky)
 
-from project_name.envs.discrete_time_chaos import (logistic_map,
-                                                   henon_map,
-                                                   tent_map,
-                                                   )
-from project_name.wrappers import (AutoResetWrapper,
-                                   DeltaObsWrapper,
-                                   NormalisedWrapperCSDA,
-                                   NormalisedWrapperCSCA,
-                                   NormalisedWrapperDeltaObsCSDA,
-                                   NormalisedWrapperDeltaObsCSCA,
-                                   PeriodicWrapper,
-                                   )
+from bifurcagym.envs.discrete_time_chaos import (logistic_map,
+                                                 henon_map,
+                                                 tent_map,
+                                                 )
+from bifurcagym.wrappers import (AutoResetWrapper,
+                                 DeltaObsWrapper,
+                                 NormalisedWrapperCSDA,
+                                 NormalisedWrapperCSCA,
+                                 NormalisedWrapperDeltaObsCSDA,
+                                 NormalisedWrapperDeltaObsCSCA,
+                                 PeriodicWrapper,
+                                 )
 
 
 def make(env_id: str,

@@ -4,7 +4,7 @@ import jax.random as jrandom
 
 import chex
 
-import project_name
+import bifurcagym
 # from gymnax.utils import state_translate, test_helpers
 
 from copy import deepcopy
@@ -22,12 +22,12 @@ env_name = "Pendulum-v0"
 
 def test_step(env_name, cont_state, cont_action, normalised, delta_obs, autoreset, key):
     key, _ = jrandom.split(key)
-    env = project_name.make(env_name,
-                            cont_state=cont_state,
-                            cont_action=cont_action,
-                            normalised=normalised,
-                            delta_obs=delta_obs,
-                            autoreset=autoreset,)
+    env = bifurcagym.make(env_name,
+                          cont_state=cont_state,
+                          cont_action=cont_action,
+                          normalised=normalised,
+                          delta_obs=delta_obs,
+                          autoreset=autoreset, )
 
     def scan_step(carry, _):
         state, key = carry
@@ -83,7 +83,7 @@ test_step(env_name,
     #     """Ensure generative step matches the normal step"""
     #     try:
     #         key, _key = jrandom.split(self.key)
-    #         env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action)
+    #         env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action)
     #
     #         # Loop over test episodes
     #         for _ in range(self.num_episodes):

@@ -1,4 +1,4 @@
-from project_name import envs, registration
+from bifurcagym import envs, registration
 
 
 make = registration.make

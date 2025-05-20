@@ -6,7 +6,7 @@ import pytest
 
 import chex
 
-import project_name
+import bifurcagym
 # from gymnax.utils import state_translate, test_helpers
 
 from copy import deepcopy
@@ -37,7 +37,7 @@ class TestEnv:
         """Test env doesn't have any errors"""
         try:
             key, _key = jrandom.split(self.key)
-            env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action)
+            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action)
 
             # Loop over test episodes
             for _ in range(self.num_episodes):
@@ -60,7 +60,7 @@ class TestEnv:
         """Ensure generative step matches the normal step"""
         try:
             key, _key = jrandom.split(self.key)
-            env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action)
+            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action)
 
             # Loop over test episodes
             for _ in range(self.num_episodes):
@@ -98,7 +98,7 @@ class TestEnv:
         """Measure the speed of the environment using jax.lax.scan."""
         try:
             key, _ = jrandom.split(self.key)
-            env = project_name.make(env_name, cont_state=cont_state, cont_action=cont_action)
+            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action)
 
             def scan_step(carry, _):
                 state, key = carry

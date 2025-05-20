@@ -9,7 +9,7 @@ import chex
 from flax import struct
 import jax
 import jax.numpy as jnp
-from project_name.envs import base_env
+from bifurcagym.envs import base_env
 from gymnax.environments import spaces
 
 

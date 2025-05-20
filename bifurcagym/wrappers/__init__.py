@@ -1,8 +1,8 @@
-from project_name.wrappers import (autoreset_wrapper,
-                                   deltaobs_wrapper,
-                                   normalised_wrapper,
-                                   periodic_wrapper
-                                   )
+from bifurcagym.wrappers import (autoreset_wrapper,
+                                 deltaobs_wrapper,
+                                 normalised_wrapper,
+                                 periodic_wrapper
+                                 )
 
 
 AutoResetWrapper = autoreset_wrapper.AutoResetWrapper
