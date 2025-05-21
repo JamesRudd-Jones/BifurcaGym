@@ -41,27 +41,6 @@ class PeriodicEnv(object):
 
         return wrapped_output, delta_obs, new_env_state, rew, done, info
 
-    @partial(jax.jit, static_argnums=(0,))
-    def generative_step(self,
-                        action: Union[int, float, chex.Array],
-                        input_obs: chex.Array,
-                        key: chex.PRNGKey,
-                        ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        obs, delta_obs, new_env_state, rew, done, info = self._wperiodic_env.generative_step(action,
-                                                                                             input_obs,
-                                                                                             key)
-
-        shifted_output_og = obs - self._wperiodic_env.observation_space().low
-        obs_range = self._wperiodic_env.observation_space().high - self._wperiodic_env.observation_space().low
-        shifted_output = jnp.remainder(shifted_output_og, obs_range)
-        modded_output = shifted_output_og + (self._wperiodic_env.periodic_dim * shifted_output) - (
-                self._wperiodic_env.periodic_dim * shifted_output_og)
-        wrapped_output = modded_output + self._wperiodic_env.observation_space().low
-
-        # TODO this adds in some error accumulation, can we avoid this?
-
-        return wrapped_output, delta_obs, new_env_state, rew, done, info
-
     def __getattr__(self, attr):
         if attr == "_wperiodic_env":
             raise AttributeError()

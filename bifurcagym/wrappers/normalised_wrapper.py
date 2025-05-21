@@ -77,16 +77,18 @@ class NormalisedEnvCSDA(object):
     @partial(jax.jit, static_argnums=(0,))
     def generative_step(self,
                         action: Union[int, float, chex.Array],
-                        norm_obs: chex.Array,
+                        gen_obs: chex.Array,
                         key: chex.PRNGKey,
                         ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        unnorm_init_obs = self.unnormalise_obs(norm_obs)
-        return self.step(action, self._wnormalised_env.get_state(unnorm_init_obs), key)
+        return self.step(action, self.get_state(gen_obs), key)
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         unnorm_obs, env_state = self._wnormalised_env.reset(key)
         return self.normalise_obs(unnorm_obs), env_state
+
+    def get_state(self, obs: chex.Array) -> EnvState:
+        return self._wnormalised_env.get_state(self.unnormalise_obs(obs))
 
     # TODO might need a render normalise as well
 
@@ -151,20 +153,6 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
         unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.step(unnorm_action,
                                                                                                   state,
                                                                                                   key)
-
-        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
-
-    @partial(jax.jit, static_argnums=(0,))
-    def generative_step(self,
-                        action: Union[int, float, chex.Array],
-                        norm_obs: chex.Array,
-                        key: chex.PRNGKey,
-                        ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        unnorm_init_obs = self.unnormalise_obs(norm_obs)
-        unnorm_action = self.unnormalise_action(action)
-        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.generative_step(unnorm_action,
-                                                                                                             unnorm_init_obs,
-                                                                                                             key)
 
         return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 

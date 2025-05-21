@@ -42,22 +42,6 @@ class AutoResetWrapper(object):
         # TODO unsure if this best approach will think about it more concretley
         return obs, delta_obs, state, reward, done, info
 
-    @partial(jax.jit, static_argnums=(0,))
-    def generative_step(self,
-                        action: Union[int, float, chex.Array],
-                        gen_obs: chex.Array,
-                        key: chex.PRNGKey,
-                        ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        obs_st, delta_obs_st, state_st, reward, done, info = self._wautoreset_env.generative_step(action, gen_obs, key)
-        key, key_reset = jrandom.split(key)
-        obs_re, state_re = self._wautoreset_env.reset(key_reset)
-        # Auto-reset environment based on termination
-        state = jax.tree.map(lambda x, y: jax.lax.select(done, x, y), state_re, state_st)
-        obs = jax.lax.select(done, obs_re, obs_st)
-        delta_obs = jax.lax.select(done, jnp.zeros_like(delta_obs_st), delta_obs_st)
-        # TODO unsure if this best approach will think about it more concretley
-        return obs, delta_obs, state, reward, done, info
-
     def __getattr__(self, attr):
         if attr == "_wautoreset_env":
             raise AttributeError()
