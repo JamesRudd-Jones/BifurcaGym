@@ -56,7 +56,7 @@ class PendulumCSDA(base_env.BaseEnvironment):
         reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradeitn(self.get_obs(new_state) - self.get_obs(state)),
+                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
