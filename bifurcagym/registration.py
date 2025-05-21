@@ -23,7 +23,7 @@ def make(env_id: str,
          cont_state=False,
          cont_action=False,
          normalised=False,
-         delta_obs=False,
+         # delta_obs=False,
          autoreset=False,
          **env_kwargs):
 
@@ -110,15 +110,17 @@ def make(env_id: str,
 
     # # # Delta obs wrapper that returns the change in obs from t to t+1, good for some Model-Based RL approaches
     ####################################################################################################################
-    if delta_obs:
-        if cont_state:
-            env = DeltaObsWrapper(env)
-        else:
-            raise ValueError("Delta Obs Not Possible for Discrete States.")
+    # if delta_obs:
+    #     if cont_state:
+    #         env = DeltaObsWrapper(env)
+    #     else:
+    #         raise ValueError("Delta Obs Not Possible for Discrete States.")
+    # TODO hardcoded delta_obs for now
 
     # # # Normalises the observation and action space  # TODO can we do reward space as well?
     ####################################################################################################################
-    if normalised and not delta_obs:
+    # if normalised and not delta_obs:
+    if normalised:
         if not cont_state and not cont_action:
             raise ValueError("Can't Normalise Discrete State Discrete Action.")
         elif cont_state and not cont_action:
@@ -128,16 +130,16 @@ def make(env_id: str,
         else:
             raise ValueError("No Normalise Wrapper for Discrete State Continuous Action.")
 
-    elif normalised and delta_obs:
-        if not cont_state and not cont_action:
-            raise ValueError("Can't Normalise Discrete State Discrete Action.")
-        elif cont_state and not cont_action:
-            env = NormalisedWrapperDeltaObsCSDA(env)
-        elif cont_state and cont_action:
-            env = NormalisedWrapperDeltaObsCSCA(env)
-        else:
-            raise ValueError("No Normalise Wrapper for Discrete State Continuous Action.")
-        # TODO a bit of a weak workaround that would be fab if we could improve
+    # elif normalised and delta_obs:
+    #     if not cont_state and not cont_action:
+    #         raise ValueError("Can't Normalise Discrete State Discrete Action.")
+    #     elif cont_state and not cont_action:
+    #         env = NormalisedWrapperDeltaObsCSDA(env)
+    #     elif cont_state and cont_action:
+    #         env = NormalisedWrapperDeltaObsCSCA(env)
+    #     else:
+    #         raise ValueError("No Normalise Wrapper for Discrete State Continuous Action.")
+    #     # TODO a bit of a weak workaround that would be fab if we could improve
 
     # # # Enables an autoresetting environment that works well with Jax, not necessary for a for loop with conditionals
     ####################################################################################################################

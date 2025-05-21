@@ -69,23 +69,23 @@ class NormalisedEnvCSDA(object):
              action: Union[int, float, chex.Array],
              state: EnvState,
              key: chex.PRNGKey,
-             ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        unnorm_obs, new_env_state, rew, done, info = self._wnormalised_env.step(action, state, key)
+             ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.step(action, state, key)
 
-        return self.normalise_obs(unnorm_obs), new_env_state, rew, done, info
+        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 
     @partial(jax.jit, static_argnums=(0,))
     def generative_step(self,
                         action: Union[int, float, chex.Array],
                         norm_obs: chex.Array,
                         key: chex.PRNGKey,
-                        ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                        ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         unnorm_init_obs = self.unnormalise_obs(norm_obs)
-        unnorm_obs, new_env_state, rew, done, info = self._wnormalised_env.generative_step(action,
+        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.generative_step(action,
                                                                                            unnorm_init_obs,
                                                                                            key)
 
-        return self.normalise_obs(unnorm_obs), new_env_state, rew, done, info
+        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -110,12 +110,24 @@ class NormalisedEnvCSDA(object):
 
         return norm_obs
 
+    def normalise_delta_obs(self,  obs: chex.Array) -> chex.Array:
+        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
+        norm_obs = obs / size # * 2  # TODO the original states times by two, unsure this is good for true normalisation
+
+        return norm_obs
+
     def unnormalise_obs(self, obs: chex.Array) -> chex.Array:
         low = self.unnorm_observation_space.low
         size = self.unnorm_obs_space_size
         obs01 = (obs + 1) / 2
         obs_ranged = obs01 * size
         unnorm_obs = obs_ranged + low
+
+        return unnorm_obs
+
+    def unnormalise_delta_obs(self, obs: chex.Array) -> chex.Array:
+        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
+        unnorm_obs = obs * size   # TODO see above regarding the original reference
 
         return unnorm_obs
 
@@ -138,25 +150,27 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
              action: Union[int, float, chex.Array],
              state: EnvState,
              key: chex.PRNGKey,
-             ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+             ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         unnorm_action = self.unnormalise_action(action)
-        unnorm_obs, new_env_state, rew, done, info = self._wnormalised_env.step(unnorm_action, state, key)
+        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.step(unnorm_action,
+                                                                                                  state,
+                                                                                                  key)
 
-        return self.normalise_obs(unnorm_obs), new_env_state, rew, done, info
+        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 
     @partial(jax.jit, static_argnums=(0,))
     def generative_step(self,
                         action: Union[int, float, chex.Array],
                         norm_obs: chex.Array,
                         key: chex.PRNGKey,
-                        ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                        ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         unnorm_init_obs = self.unnormalise_obs(norm_obs)
         unnorm_action = self.unnormalise_action(action)
-        unnorm_obs, new_env_state, rew, done, info = self._wnormalised_env.generative_step(unnorm_action,
+        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.generative_step(unnorm_action,
                                                                                            unnorm_init_obs,
                                                                                            key)
 
-        return self.normalise_obs(unnorm_obs), new_env_state, rew, done, info
+        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 
     def reward_func(self,
                     action_t: Union[int, float, chex.Array],

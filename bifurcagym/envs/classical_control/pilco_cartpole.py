@@ -47,7 +47,7 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
                  input_action: Union[int, float, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                 ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         action = self._action_convert(input_action)
 
         costheta = jnp.cos(state.theta)
@@ -67,6 +67,7 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
         theta_dot = state.theta_dot + thetadot_update * self.dt
 
         delta_s = jnp.array((x, x_dot, unnorm_theta, theta_dot)) - self.get_obs(state)
+        # TODO check why this is unnorm theta
 
         # Update state dict and evaluate termination conditions
         new_state = EnvState(x=x,
@@ -78,17 +79,17 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
         reward = self.reward_func(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                delta_s,
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
-                {"discount": self.discount(new_state),
-                 "delta_obs": delta_s})
+                {"discount": self.discount(new_state)})
 
     def generative_step_env(self,
                             action: Union[int, float, chex.Array],
                             obs: chex.Array,
                             key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                            ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         state = EnvState(x=obs[0], x_dot=obs[1], theta=self._angle_normalise(obs[2]), theta_dot=obs[3], time=0)
         return self.step(action, state, key)
 

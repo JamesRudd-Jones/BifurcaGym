@@ -27,18 +27,18 @@ class BaseEnvironment(abc.ABC):  # object):
              action: Union[int, float, chex.Array],
              state: EnvState,
              key: chex.PRNGKey,
-             ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        obs, state, reward, done, info = self.step_env(action, state, key)
-        return obs, state, reward, done, info
+             ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        obs, delta_obs, state, reward, done, info = self.step_env(action, state, key)
+        return obs, delta_obs, state, reward, done, info
 
     @partial(jax.jit, static_argnums=(0,))
     def generative_step(self,
                         action: Union[int, float, chex.Array],
                         gen_obs: chex.Array,
                         key: chex.PRNGKey,
-                        ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        obs, state, reward, done, info = self.generative_step_env(action, gen_obs, key)
-        return obs, state, reward, done, info
+                        ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        obs, delta_obs, state, reward, done, info = self.generative_step_env(action, gen_obs, key)
+        return obs, delta_obs, state, reward, done, info
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
@@ -49,14 +49,14 @@ class BaseEnvironment(abc.ABC):  # object):
                  action: Union[int, float, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+                ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         raise NotImplementedError
 
     def generative_step_env(self,
                             action: Union[int, float, chex.Array],
                             gen_obs: chex.Array,
                             key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+                            ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         raise NotImplementedError
 
     def reset_env(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:

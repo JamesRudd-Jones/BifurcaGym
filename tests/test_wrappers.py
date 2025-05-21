@@ -20,10 +20,10 @@ env_names = [
              "LogisticMap-v0",
              # "TentMap-v0",
              ]
-cont_state = [True, False]
-cont_action = [True, False]
-normalised = [True, False]
-delta_obs = [True, False]
+cont_state = [True]#, False]
+cont_action = [True]#, False]
+normalised = [False]#, False]
+delta_obs = [True]#, False]
 
 all_combinations = list(itertools.product(env_names,
                                           cont_state,

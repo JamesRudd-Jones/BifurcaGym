@@ -45,7 +45,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                  input_action: Union[int, float, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                 ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         torque = self._action_convert(input_action)
 
         # Add noise to force action - always sample - conditionals in JAX
@@ -78,6 +78,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         reward = self.reward_func(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jnp.array(None),  # TODO add delta obs
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
@@ -88,7 +89,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                             action: Union[int, float, chex.Array],
                             obs: chex.Array,
                             key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+                            ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         state = EnvState(joint_angle_1=jnp.arctan2(obs[1], obs[0]),
                          joint_angle_2=jnp.arctan2(obs[3], obs[2]),
                          vel_1=obs[4],

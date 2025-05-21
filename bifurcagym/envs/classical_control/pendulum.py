@@ -39,7 +39,7 @@ class PendulumCSDA(base_env.BaseEnvironment):
                  input_action: Union[int, float, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                 ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         action = self._action_convert(input_action)
 
         newthdot = (state.theta_dot + (-3 * self.gravity / (2 * self.length) * jnp.sin(state.theta + jnp.pi) +
@@ -49,22 +49,24 @@ class PendulumCSDA(base_env.BaseEnvironment):
         newthdot = jnp.clip(newthdot, -self.max_speed, self.max_speed)
 
         delta_s = jnp.array((unnorm_newth, newthdot)) - self.get_obs(state)
+        # TODO check why this is unnorm_newth and that
 
         new_state = EnvState(theta=newth, theta_dot=newthdot, time=state.time+1)
 
         reward = self.reward_func(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                delta_s,
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
-                {"delta_obs": delta_s})
+                {})
 
     def generative_step_env(self,
                             action: Union[int, float, chex.Array],
                             obs: chex.Array,
                             key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+                            ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         state = EnvState(theta=obs[0], theta_dot=obs[1], time=0)
         return self.step(action, state, key)
 

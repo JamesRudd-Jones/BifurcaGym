@@ -49,7 +49,7 @@ class LogisticMapDSDA(base_env.BaseEnvironment):
                  input_action: Union[int, float, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                 ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         action = self._action_convert(input_action).squeeze()
 
         new_x = (action + self.init_r) * state.x * (1 - state.x)
@@ -59,6 +59,7 @@ class LogisticMapDSDA(base_env.BaseEnvironment):
         reward = self.reward_func(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jnp.array(None),   # TODO add sosme delta_obs
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
@@ -68,7 +69,7 @@ class LogisticMapDSDA(base_env.BaseEnvironment):
                             action: Union[int, float, chex.Array],
                             obs: chex.Array,
                             key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                            ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
         state = EnvState(x=obs, time=0)
         return self.step(action, state, key)
 
