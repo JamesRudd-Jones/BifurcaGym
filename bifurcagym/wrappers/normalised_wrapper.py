@@ -108,7 +108,7 @@ class NormalisedEnvCSDA(object):
 
     def normalise_delta_obs(self,  obs: chex.Array) -> chex.Array:
         size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        norm_obs = obs / size # * 2  # TODO the original states times by two, unsure this is good for true normalisation
+        norm_obs = obs / size * 2  # TODO the original states times by two, unsure this is good for true normalisation
 
         return norm_obs
 
@@ -123,7 +123,7 @@ class NormalisedEnvCSDA(object):
 
     def unnormalise_delta_obs(self, obs: chex.Array) -> chex.Array:
         size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        unnorm_obs = obs * size   # TODO see above regarding the original reference
+        unnorm_obs = obs * size / 2  # TODO see above regarding the original reference
 
         return unnorm_obs
 
@@ -163,21 +163,20 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
         unnorm_init_obs = self.unnormalise_obs(norm_obs)
         unnorm_action = self.unnormalise_action(action)
         unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.generative_step(unnorm_action,
-                                                                                           unnorm_init_obs,
-                                                                                           key)
+                                                                                                             unnorm_init_obs,
+                                                                                                             key)
 
         return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 
-    def reward_func(self,
-                    action_t: Union[int, float, chex.Array],
-                    state_t: EnvState,
-                    state_tp1: EnvState,
-                    key: chex.PRNGKey,
-                    ) -> chex.Array:
+    def reward_function(self,
+                        action_t: Union[int, float, chex.Array],
+                        state_t: EnvState,
+                        state_tp1: EnvState,
+                        key: chex.PRNGKey,
+                        ) -> chex.Array:
         unnorm_action = self.unnormalise_action(action_t)
-        rewards = self._wnormalised_env.reward_func(unnorm_action, state_t, state_tp1, key)
 
-        return rewards
+        return self._wnormalised_env.reward_function(unnorm_action, state_t, state_tp1, key)
 
     def unnormalise_action(self, action: Union[int, float, chex.Array]) -> Union[int, float, chex.Array]:
         low = self.unnorm_action_space.low
@@ -195,77 +194,3 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
         norm_action = (pos_action / size * 2) - 1
 
         return norm_action
-
-
-class NormalisedEnvDeltaObsCSDA(NormalisedEnvCSDA):
-    """
-    A work-around for the normalisation being different if using delta_obs
-    """
-
-    def __init__(self, wnormalised_env):
-        super().__init__(wnormalised_env)
-
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        return self._wnormalised_env.reset(key)
-    # TODO we don't have a delta obs at reset so this be pointless to normalise right?
-
-    def normalise_obs(self,  obs: chex.Array) -> chex.Array:
-        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        norm_obs = obs / size
-
-        return norm_obs
-
-    # We don't need an unnormalise obs to be different as the input for generative step is for normalised values
-    # However we do need the below for test verification
-
-    def test_normalise_obs(self,  obs: chex.Array) -> chex.Array:
-        low = self.unnorm_observation_space.low
-        size = self.unnorm_obs_space_size
-        pos_obs = obs - low
-        norm_obs = (pos_obs / size * 2) - 1
-
-        return norm_obs
-
-    def test_unnormalise_obs(self, obs: chex.Array) -> chex.Array:
-        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        unnorm_obs = obs * size
-
-        return unnorm_obs
-
-
-class NormalisedEnvDeltaObsCSCA(NormalisedEnvCSCA):
-    """
-    A work-around for the normalisation being different if using delta_obs
-    """
-
-    def __init__(self, wnormalised_env):
-        super().__init__(wnormalised_env)
-
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        return self._wnormalised_env.reset(key)
-    # TODO we don't have a delta obs at reset so this be pointless to normalise right?
-
-    def normalise_obs(self, obs: chex.Array) -> chex.Array:
-        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        norm_obs = obs / size
-
-        return norm_obs
-
-        # We don't need an unnormalise obs to be different as the input for generative step is for normalised values
-        # However we do need the below for test verification
-
-    def test_normalise_obs(self,  obs: chex.Array) -> chex.Array:
-        low = self.unnorm_observation_space.low
-        size = self.unnorm_obs_space_size
-        pos_obs = obs - low
-        norm_obs = (pos_obs / size * 2) - 1
-
-        return norm_obs
-
-    def test_unnormalise_obs(self, obs: chex.Array) -> chex.Array:
-        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        unnorm_obs = obs * size
-
-        return unnorm_obs

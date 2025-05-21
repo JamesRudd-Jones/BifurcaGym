@@ -37,6 +37,8 @@ class PeriodicEnv(object):
                     self._wperiodic_env.periodic_dim * shifted_output_og)
         wrapped_output = modded_output + self._wperiodic_env.observation_space().low
 
+        # TODO this adds in some error accumulation, can we avoid this?
+
         return wrapped_output, delta_obs, new_env_state, rew, done, info
 
     @partial(jax.jit, static_argnums=(0,))

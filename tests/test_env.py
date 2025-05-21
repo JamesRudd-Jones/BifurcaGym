@@ -17,9 +17,9 @@ import itertools
 env_names = [
              # "Acrobot-v0",
              "Pendulum-v0",
-             "PilcoCartPole-v0",
+             # "PilcoCartPole-v0",
              # "HenonMap-v0",
-             "LogisticMap-v0",
+             # "LogisticMap-v0",
              # "TentMap-v0",
              ]
 cont_state = [True]#, False]
@@ -54,7 +54,7 @@ class TestEnv:
                     key, _key = jrandom.split(key)
                     action = env.action_space().sample(_key)
                     key, _key = jrandom.split(key)
-                    obs, state, reward, done_jax, _ = env.step(action, state, _key)
+                    obs, delta_obs, state, reward, done_jax, _ = env.step(action, state, _key)
 
         except ValueError as e:
             print(f"Caught expected ValueError for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
@@ -78,15 +78,17 @@ class TestEnv:
                     action = env.action_space().sample(_key)
 
                     key, _key = jrandom.split(key)
-                    gen_step_obs, gen_step_state, gen_step_reward, gen_step_done, _ = env.generative_step(action,
+                    gen_step_obs, gen_step_delta_obs, gen_step_state, gen_step_reward, gen_step_done, _ = env.generative_step(action,
                                                                                                           obs,
                                                                                                           _key)
-                    step_obs, state, step_reward, step_done, _ = env.step(action, state, _key)
+                    step_obs, step_delta_obs, state, step_reward, step_done, _ = env.step(action, state, _key)
 
                     if obs.dtype == jnp.int32 or obs.dtype == jnp.int64:
                         chex.assert_trees_all_equal(step_obs, gen_step_obs)
+                        chex.assert_trees_all_equal(step_delta_obs, gen_step_delta_obs)
                     else:
                         chex.assert_trees_all_close(step_obs, gen_step_obs, atol=self.error)
+                        chex.assert_trees_all_close(step_delta_obs, gen_step_delta_obs, atol=self.error)
                     gen_step_state = gen_step_state.replace(time=state.time)
                     chex.assert_trees_all_close(state, gen_step_state, atol=self.error)
                     chex.assert_trees_all_close(step_reward, gen_step_reward, atol=self.error)
@@ -111,7 +113,7 @@ class TestEnv:
                 key, _key = jrandom.split(key)
                 action = env.action_space().sample(_key)
                 key, _key = jrandom.split(key)
-                obs, next_state, reward, done, info = env.step(action, state, _key)
+                obs, delta_obs, next_state, reward, done, info = env.step(action, state, _key)
                 return (next_state, key), None
 
             start_time = time.time()

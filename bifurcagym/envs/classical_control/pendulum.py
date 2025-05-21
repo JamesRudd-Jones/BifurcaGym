@@ -48,15 +48,15 @@ class PendulumCSDA(base_env.BaseEnvironment):
         newth = self._angle_normalise(unnorm_newth)
         newthdot = jnp.clip(newthdot, -self.max_speed, self.max_speed)
 
-        delta_s = jnp.array((unnorm_newth, newthdot)) - self.get_obs(state)
-        # TODO check why this is unnorm_newth and that
+        # delta_s = jnp.array((unnorm_newth, newthdot)) - self.get_obs(state)
+        # TODO check why this is unnorm_newth and that from the original
 
         new_state = EnvState(theta=newth, theta_dot=newthdot, time=state.time+1)
 
         reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                delta_s,
+                jax.lax.stop_gradeitn(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
