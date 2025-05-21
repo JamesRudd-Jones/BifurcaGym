@@ -46,7 +46,7 @@ class TentMapDSDA(base_env.BaseEnvironment):
 
         new_state = EnvState(x=new_x, time=state.time+1)
 
-        reward = self.reward_func(input_action, state, new_state, key)
+        reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(new_state),
@@ -65,7 +65,7 @@ class TentMapDSDA(base_env.BaseEnvironment):
     def _action_convert(self, input_action):
         return self.action_array[input_action] * self.max_control
 
-    def reward_func(self,
+    def reward_function(self,
                     input_action_t: Union[int, float, chex.Array],
                     state_t: EnvState,
                     state_tp1: EnvState,

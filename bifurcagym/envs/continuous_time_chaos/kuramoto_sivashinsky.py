@@ -94,7 +94,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         new_state = EnvState(u=u_S,
                          time=state.time + 1)
 
-        reward = self.reward_func(input_action, state, new_state, key)
+        reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(new_state),
@@ -110,7 +110,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         state = EnvState(u=obs, time=0)
         return self.step(action, state, key)
 
-    def reward_func(self,
+    def reward_function(self,
                     input_action_t: Union[int, float, chex.Array],
                     state_t: EnvState,
                     state_tp1: EnvState,

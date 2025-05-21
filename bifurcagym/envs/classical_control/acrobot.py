@@ -75,7 +75,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                          time=jnp.int32(state.time + 1),
                          )
 
-        reward = self.reward_func(input_action, state, new_state, key)
+        reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jnp.array(None),  # TODO add delta obs
@@ -139,7 +139,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
     def _action_convert(self, input_action):
         return self.action_array[input_action] * self.max_torque
 
-    def reward_func(self,
+    def reward_function(self,
                     input_action_t: Union[int, float, chex.Array],
                     state_t: EnvState,
                     state_tp1: EnvState,

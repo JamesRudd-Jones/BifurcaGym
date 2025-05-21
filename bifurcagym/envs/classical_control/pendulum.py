@@ -53,7 +53,7 @@ class PendulumCSDA(base_env.BaseEnvironment):
 
         new_state = EnvState(theta=newth, theta_dot=newthdot, time=state.time+1)
 
-        reward = self.reward_func(input_action, state, new_state, key)
+        reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 delta_s,
@@ -62,21 +62,13 @@ class PendulumCSDA(base_env.BaseEnvironment):
                 self.is_done(new_state),
                 {})
 
-    def generative_step_env(self,
-                            action: Union[int, float, chex.Array],
-                            obs: chex.Array,
-                            key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        state = EnvState(theta=obs[0], theta_dot=obs[1], time=0)
-        return self.step(action, state, key)
-
     def _action_convert(self, input_action):
         return self.action_array[input_action] * self.max_torque
 
     def _angle_normalise(self, x):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
-    def reward_func(self,
+    def reward_function(self,
                     input_action_t: Union[int, float, chex.Array],
                     state_t: EnvState,
                     state_tp1: EnvState,
@@ -140,6 +132,9 @@ class PendulumCSDA(base_env.BaseEnvironment):
 
     def get_obs(self, state: EnvState, key=None) -> chex.Array:
         return jnp.array([state.theta, state.theta_dot])
+
+    def get_state(self, obs: chex.Array) -> EnvState:
+        return EnvState(theta=obs[0], theta_dot=obs[1], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
         return jnp.array(False)

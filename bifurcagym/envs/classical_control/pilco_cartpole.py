@@ -76,7 +76,7 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
                              theta_dot=theta_dot,
                              time=state.time + 1)
 
-        reward = self.reward_func(input_action, state, new_state, key)
+        reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 delta_s,
@@ -100,7 +100,7 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
     def _angle_normalise(x):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
-    def reward_func(self,
+    def reward_function(self,
                     input_action_t: Union[int, float, chex.Array],
                     state_t: EnvState,
                     state_tp1: EnvState,

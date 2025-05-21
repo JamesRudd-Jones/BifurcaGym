@@ -109,7 +109,7 @@ class WetChickenDSDA(base_env.BaseEnvironment):
     def _action_convert(self, input_action):
         return self.action_array[input_action]
 
-    def reward_func(self,
+    def reward_function(self,
                     x_t: chex.Array,
                     x_tp1: chex.Array,
                     key: chex.PRNGKey,

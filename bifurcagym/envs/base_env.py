@@ -37,8 +37,7 @@ class BaseEnvironment(abc.ABC):  # object):
                         gen_obs: chex.Array,
                         key: chex.PRNGKey,
                         ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        obs, delta_obs, state, reward, done, info = self.generative_step_env(action, gen_obs, key)
-        return obs, delta_obs, state, reward, done, info
+        return self.step_env(action, self.get_state(gen_obs), key)
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
@@ -50,13 +49,6 @@ class BaseEnvironment(abc.ABC):  # object):
                  state: EnvState,
                  key: chex.PRNGKey,
                 ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        raise NotImplementedError
-
-    def generative_step_env(self,
-                            action: Union[int, float, chex.Array],
-                            gen_obs: chex.Array,
-                            key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         raise NotImplementedError
 
     def reset_env(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
@@ -93,6 +85,10 @@ class BaseEnvironment(abc.ABC):  # object):
                 state,
                 key=None
                 ) -> chex.Array:
+        raise NotImplementedError
+
+    def get_state(self,
+                  obs: chex.Array) -> EnvState:
         raise NotImplementedError
 
     def is_done(self, state: EnvState) -> chex.Array:
