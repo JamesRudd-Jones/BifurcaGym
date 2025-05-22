@@ -85,14 +85,6 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
                 self.is_done(new_state),
                 {"discount": self.discount(new_state)})
 
-    def generative_step_env(self,
-                            action: Union[int, float, chex.Array],
-                            obs: chex.Array,
-                            key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        state = EnvState(x=obs[0], x_dot=obs[1], theta=self._angle_normalise(obs[2]), theta_dot=obs[3], time=0)
-        return self.step(action, state, key)
-
     def _action_convert(self, input_action):
         return self.action_array[input_action] * self.force_mag
 
@@ -132,6 +124,9 @@ class PilcoCartPoleCSDA(base_env.BaseEnvironment):
         # return jnp.array([state.x, state.x_dot, jnp.sin(state.theta), jnp.cos(state.theta), state.theta_dot])
         # Otherwise
         return jnp.array([state.x, state.x_dot, state.theta, state.theta_dot])
+
+    def get_state(self, obs: chex.Array) -> EnvState:
+        return EnvState(x=obs[0], x_dot=obs[1], theta=self._angle_normalise(obs[2]), theta_dot=obs[3], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
         return jnp.array(False)

@@ -16,14 +16,14 @@ import itertools
 
 env_names = [
              # "Acrobot-v0",
-             "Pendulum-v0",
+             # "Pendulum-v0",
              # "PilcoCartPole-v0",
              # "HenonMap-v0",
-             # "LogisticMap-v0",
+             "LogisticMap-v0",
              # "TentMap-v0",
              ]
-cont_state = [True]#, False]
-cont_action = [True]
+cont_state = [True, False]
+cont_action = [True, False]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 

@@ -83,6 +83,11 @@ class NormalisedEnvCSDA(object):
         return self.step(action, self.get_state(gen_obs), key)
 
     @partial(jax.jit, static_argnums=(0,))
+    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array) -> chex.Array:
+        unnorm_nobs = self._wnormalised_env.apply_delta_obs(self.unnormalise_obs(obs), self.unnormalise_delta_obs(delta_obs))
+        return self.normalise_obs(unnorm_nobs)
+
+    @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         unnorm_obs, env_state = self._wnormalised_env.reset(key)
         return self.normalise_obs(unnorm_obs), env_state

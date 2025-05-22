@@ -40,6 +40,10 @@ class BaseEnvironment(abc.ABC):  # object):
         return self.step_env(action, self.get_state(gen_obs), key)
 
     @partial(jax.jit, static_argnums=(0,))
+    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array) -> chex.Array:
+        return obs + delta_obs
+
+    @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> tuple[chex.Array, EnvState]:
         obs, state = self.reset_env(key)
         return obs, state
