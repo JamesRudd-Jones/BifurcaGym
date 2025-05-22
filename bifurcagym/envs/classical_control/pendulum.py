@@ -1,14 +1,11 @@
-import numpy as np
-from os import path
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from bifurcagym.envs import base_env
-from gymnax.environments import spaces
+from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 import chex
-import jax
-import matplotlib.pyplot as plt
 
 
 @struct.dataclass
@@ -23,24 +20,25 @@ class PendulumCSDA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.periodic_dim: chex.Array = jnp.array((1, 0))  # TODO is this the best way?
+        self.periodic_dim: chex.Array = jnp.array((1, 0))
 
         self.max_speed: float = 8.0
-        self.max_torque: float = 2.0
-        self.dt: float = 0.05
         self.gravity: float = 10.0
         self.mass: float = 1.0
         self.length: float = 1.0
-        self.horizon: int = 200
 
-        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
+        self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
+        self.max_torque: float = 2.0
+
+        self.horizon: int = 200
+        self.dt: float = 0.05
 
     def step_env(self,
-                 input_action: Union[int, float, chex.Array],
+                 input_action: Union[jnp.int_, jnp.float_, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                 ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        action = self._action_convert(input_action)
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        action = self.action_convert(input_action)
 
         newthdot = (state.theta_dot + (-3 * self.gravity / (2 * self.length) * jnp.sin(state.theta + jnp.pi) +
                                        3.0 / (self.mass * self.length ** 2) * action) * self.dt)
@@ -62,21 +60,9 @@ class PendulumCSDA(base_env.BaseEnvironment):
                 self.is_done(new_state),
                 {})
 
-    def _action_convert(self, input_action):
-        return self.action_array[input_action] * self.max_torque
-
-    def _angle_normalise(self, x):
+    @staticmethod
+    def _angle_normalise(x):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
-
-    def reward_function(self,
-                    input_action_t: Union[int, float, chex.Array],
-                    state_t: EnvState,
-                    state_tp1: EnvState,
-                    key: chex.PRNGKey,
-                    ) -> chex.Array:
-        action_t = self._action_convert(input_action_t)
-        costs = self._angle_normalise(state_tp1.theta) ** 2 + 0.1 * state_tp1.theta_dot ** 2 + 0.001 * (action_t ** 2)
-        return -costs
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         high = jnp.array([jnp.pi, 1])
@@ -86,6 +72,30 @@ class PendulumCSDA(base_env.BaseEnvironment):
                          time=0)
 
         return self.get_obs(state), state
+
+    def reward_function(self,
+                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
+                        state_t: EnvState,
+                        state_tp1: EnvState,
+                        key: chex.PRNGKey = None,
+                        ) -> chex.Array:
+        action_t = self.action_convert(input_action_t)
+        costs = self._angle_normalise(state_tp1.theta) ** 2 + 0.1 * state_tp1.theta_dot ** 2 + 0.001 * (action_t ** 2)
+
+        return -costs
+
+    def action_convert(self,
+                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        return self.action_array[action] * self.max_torque
+
+    def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
+        return jnp.array([state.theta, state.theta_dot])
+
+    def get_state(self, obs: chex.Array) -> EnvState:
+        return EnvState(theta=obs[0], theta_dot=obs[1], time=-1)
+
+    def is_done(self, state: EnvState) -> chex.Array:
+        return jnp.array(False)
 
     def render_traj(self, trajectory_state: EnvState):
         """Render the pendulum's trajectory as an animation.
@@ -130,15 +140,6 @@ class PendulumCSDA(base_env.BaseEnvironment):
         anim.save(f"./animations/{self.name}.gif")
         plt.close()
 
-    def get_obs(self, state: EnvState, key=None) -> chex.Array:
-        return jnp.array([state.theta, state.theta_dot])
-
-    def get_state(self, obs: chex.Array) -> EnvState:
-        return EnvState(theta=obs[0], theta_dot=obs[1], time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        return jnp.array(False)
-
     @property
     def name(self) -> str:
         return "Pendulum-v0"
@@ -155,8 +156,9 @@ class PendulumCSCA(PendulumCSDA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-    def _action_convert(self, input_action):
-        return jnp.clip(input_action, -self.max_torque, self.max_torque)[0]
+    def action_convert(self,
+                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        return jnp.clip(action, -self.max_torque, self.max_torque).squeeze()
 
     def action_space(self) -> spaces.Box:
         return spaces.Box(-self.max_torque, self.max_torque, shape=(1,))

@@ -1,13 +1,10 @@
-from gymnax.environments import spaces
-from copy import deepcopy
-import jax.numpy as jnp
-import jax.random as jrandom
 import jax
+import jax.numpy as jnp
 from functools import partial
 import chex
-from typing import Any, Dict, Generic, Optional, Tuple, TypeVar, Union, overload
-from bifurcagym.envs import base_env
-from bifurcagym.envs.base_env import EnvState
+from typing import Any, Dict, Tuple, Union
+from bifurcagym.envs import EnvState
+from bifurcagym import spaces
 
 
 # def make_normalised_plot_fn(norm_env, env_params, plot_fn):
@@ -43,67 +40,51 @@ class NormalisedEnvCSDA(object):
     """
     Normalises obs to be between -1 and 1
     """
-    def __init__(self, wnormalised_env):
+    def __init__(self, wrapped_normalised_env):
 
-        self._wnormalised_env = wnormalised_env
-        self.unnorm_action_space = self._wnormalised_env.action_space()
-        self.unnorm_observation_space = self._wnormalised_env.observation_space()
+        self._wrapped_normalised_env = wrapped_normalised_env
+        self.unnorm_action_space = self._wrapped_normalised_env.action_space()
+        self.unnorm_observation_space = self._wrapped_normalised_env.observation_space()
 
         self.unnorm_obs_space_size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
 
-    # @property
-    # def wnormalised_env(self):
-    #     return self._wnormalised_env
-
-    def action_space(self) -> spaces.Discrete:
-        return self.unnorm_action_space
-
-    def observation_space(self) -> spaces.Box:
-        return spaces.Box(low=-jnp.ones_like(self.unnorm_observation_space.low,),
-                          high=jnp.ones_like(self.unnorm_observation_space.high,),
-                          shape=self.unnorm_observation_space.shape,
-                          dtype=self.unnorm_observation_space.dtype)
+    @property
+    def wrapped_normalised_env(self):
+        return self._wrapped_normalised_env
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
-             action: Union[int, float, chex.Array],
+             action: Union[jnp.int_, jnp.float_, chex.Array],
              state: EnvState,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.step(action, state, key)
+        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wrapped_normalised_env.step(action,
+                                                                                                         state,
+                                                                                                         key)
 
         return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 
     @partial(jax.jit, static_argnums=(0,))
     def generative_step(self,
-                        action: Union[int, float, chex.Array],
+                        action: Union[jnp.int_, jnp.float_, chex.Array],
                         gen_obs: chex.Array,
                         key: chex.PRNGKey,
                         ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         return self.step(action, self.get_state(gen_obs), key)
 
     @partial(jax.jit, static_argnums=(0,))
-    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array) -> chex.Array:
-        unnorm_nobs = self._wnormalised_env.apply_delta_obs(self.unnormalise_obs(obs), self.unnormalise_delta_obs(delta_obs))
-        return self.normalise_obs(unnorm_nobs)
-
-    @partial(jax.jit, static_argnums=(0,))
     def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        unnorm_obs, env_state = self._wnormalised_env.reset(key)
+        unnorm_obs, env_state = self._wrapped_normalised_env.reset(key)
         return self.normalise_obs(unnorm_obs), env_state
 
+    @partial(jax.jit, static_argnums=(0,))
+    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array) -> chex.Array:
+        unnorm_nobs = self._wrapped_normalised_env.apply_delta_obs(self.unnormalise_obs(obs),
+                                                                   self.unnormalise_delta_obs(delta_obs))
+        return self.normalise_obs(unnorm_nobs)
+
     def get_state(self, obs: chex.Array) -> EnvState:
-        return self._wnormalised_env.get_state(self.unnormalise_obs(obs))
-
-    # TODO might need a render normalise as well
-
-    def __getattr__(self, attr):
-        if attr == "_wnormalised_env":
-            raise AttributeError()
-        return getattr(self._wnormalised_env, attr)
-
-    # def __str__(self):
-    #     return "{}({})".format(type(self).__name__, self.wnormalised_env)
+        return self._wrapped_normalised_env.get_state(self.unnormalise_obs(obs))
 
     def normalise_obs(self,  obs: chex.Array) -> chex.Array:
         low = self.unnorm_observation_space.low
@@ -134,44 +115,55 @@ class NormalisedEnvCSDA(object):
 
         return unnorm_obs
 
+    def observation_space(self) -> spaces.Box:
+        return spaces.Box(low=-1,
+                          high=1,
+                          shape=self.unnorm_observation_space.shape,
+                          dtype=self.unnorm_observation_space.dtype)
+
+    def __getattr__(self, attr):
+        if attr == "_wrapped_normalised_env":
+            raise AttributeError()
+        return getattr(self._wrapped_normalised_env, attr)
+
+    def __str__(self):
+        return "{}({})".format(type(self).__name__, self.wrapped_normalised_env)
+
 
 class NormalisedEnvCSCA(NormalisedEnvCSDA):
     """
     Normalises obs to be between -1 and 1
     Normalises actions to be between -1 and 1
     """
-    def __init__(self, wnormalised_env):
-        super().__init__(wnormalised_env)
+    def __init__(self, wrapped_normalised_env):
+        super().__init__(wrapped_normalised_env)
 
         self.unnorm_action_space_size = self.unnorm_action_space.high - self.unnorm_action_space.low
 
-    def action_space(self) -> spaces.Box:
-        return spaces.Box(low=-1, high=1, shape=self.unnorm_action_space.shape, dtype=self.unnorm_action_space.dtype)
-
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
-             action: Union[int, float, chex.Array],
+             action: Union[jnp.int_, jnp.float_, chex.Array],
              state: EnvState,
              key: chex.PRNGKey,
-             ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+             ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         unnorm_action = self.unnormalise_action(action)
-        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wnormalised_env.step(unnorm_action,
+        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wrapped_normalised_env.step(unnorm_action,
                                                                                                   state,
                                                                                                   key)
 
         return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
 
     def reward_function(self,
-                        action_t: Union[int, float, chex.Array],
+                        input_action_t: Union[int, float, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey,
                         ) -> chex.Array:
-        unnorm_action = self.unnormalise_action(action_t)
+        unnorm_action = self.unnormalise_action(input_action_t)
 
-        return self._wnormalised_env.reward_function(unnorm_action, state_t, state_tp1, key)
+        return self._wrapped_normalised_env.reward_function(unnorm_action, state_t, state_tp1, key)
 
-    def unnormalise_action(self, action: Union[int, float, chex.Array]) -> Union[int, float, chex.Array]:
+    def unnormalise_action(self, action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
         low = self.unnorm_action_space.low
         size = self.unnorm_action_space_size
         act01 = (action + 1) / 2
@@ -180,10 +172,16 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
 
         return unnorm_act
 
-    def normalise_action(self, action: Union[int, float, chex.Array]) -> Union[int, float, chex.Array]:
+    def normalise_action(self, action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
         low = self.unnorm_action_space.low
         size = self.unnorm_action_space_size
         pos_action = action - low
         norm_action = (pos_action / size * 2) - 1
 
         return norm_action
+
+    def action_space(self) -> spaces.Box:
+        return spaces.Box(low=-1,
+                          high=1,
+                          shape=self.unnorm_action_space.shape,
+                          dtype=self.unnorm_action_space.dtype)

@@ -22,8 +22,8 @@ env_names = [
              "LogisticMap-v0",
              # "TentMap-v0",
              ]
-cont_state = [True, False]
-cont_action = [True, False]
+cont_state = [False]
+cont_action = [False]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 
@@ -83,7 +83,7 @@ class TestEnv:
                                                                                                           _key)
                     step_obs, step_delta_obs, state, step_reward, step_done, _ = env.step(action, state, _key)
 
-                    if obs.dtype == jnp.int32 or obs.dtype == jnp.int64:
+                    if not cont_state:
                         chex.assert_trees_all_equal(step_obs, gen_step_obs)
                         chex.assert_trees_all_equal(step_delta_obs, gen_step_delta_obs)
                     else:

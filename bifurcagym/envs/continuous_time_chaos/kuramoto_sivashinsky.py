@@ -1,15 +1,11 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 from bifurcagym.envs import base_env
-from gymnax.environments import spaces
+from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 import chex
-from typing import Optional
-import jax
-
-
-# jax.config.update("jax_enable_x64", True)  # TODO unsure if need or not but will check results
 
 
 @struct.dataclass
@@ -25,22 +21,20 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         self.x: jnp.ndarray = jnp.array(np.loadtxt("../bifurcagym/envs/continuous_time_chaos/ks_files/x.dat"))  # select space discretization of the target solution
         self.U_bf: jnp.ndarray = jnp.array(np.loadtxt('../bifurcagym/envs/continuous_time_chaos/ks_files/u2.dat'))  # select u1, u2 or u3 as target solution
-
-        self.max_control: float = 0.1
-        self.horizon: int = 200
+        N = self.x.size
 
         self.state_dim: int = 8
         self.action_dim: int = 4
-
-        N = self.x.size
-        self.dt: float = 0.05
         self.L: int = 22
         self.x_S = jnp.arange(N) * self.L / N
         k_K = N * jnp.fft.fftfreq(N)[0:N // 2 + 1] * 2 * jnp.pi / self.L
         self.ik_K = 1j * k_K  # spectral derivative operator
         self.lin_K = k_K ** 2 - k_K ** 4  # Fourier multipliers for linear term
-        self.a_dim = self.action_dim
-        self.s_dim = self.state_dim
+
+        self.max_control: float = 0.1
+
+        self.horizon: int = 200
+        self.dt: float = 0.05
 
         sig = 0.4
         x_zero_A = self.x_S[-1] / self.action_dim * jnp.arange(0, self.action_dim)
@@ -58,16 +52,11 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                                                                             self.x_S[1] - self.x_S[0],
                                                                             ).T
 
-    def nlterm(self, u, f):
-        # compute tendency from nonlinear term. advection + forcing
-        ur = jnp.fft.irfft(u, axis=-1)
-        return -0.5 * self.ik_K * jnp.fft.rfft(ur ** 2, axis=-1) + f
-
     def step_env(self,
-                 input_action: Union[int, float, chex.Array],
+                 input_action: Union[jnp.int_, jnp.float_, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                 ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         # forcing shape
         dum_SA = self.B_SA * input_action.T  # TODO check this transpose
         f0_S = jnp.sum(dum_SA, axis=-1)
@@ -91,42 +80,43 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         final_runner_state = jax.lax.scan(_runge_kutta_update, (u_K, 0), None, 3)
         u_S = jnp.fft.irfft(final_runner_state[0][0], axis=-1)
 
-        new_state = EnvState(u=u_S,
-                         time=state.time + 1)
+        new_state = EnvState(u=u_S, time=state.time+1)
 
         reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
                 {})
 
-    def generative_step_env(self,
-                            action: Union[int, float, chex.Array],
-                            obs: chex.Array,
-                            key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        state = EnvState(u=obs, time=0)
-        return self.step(action, state, key)
-
-    def reward_function(self,
-                    input_action_t: Union[int, float, chex.Array],
-                    state_t: EnvState,
-                    state_tp1: EnvState,
-                    key: chex.PRNGKey,
-                    ) -> chex.Array:
-        reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
-        return reward
+    def nlterm(self, u, f):
+        # compute tendency from nonlinear term. advection + forcing
+        ur = jnp.fft.irfft(u, axis=-1)
+        return -0.5 * self.ik_K * jnp.fft.rfft(ur ** 2, axis=-1) + f
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         u_S = jnp.array(np.loadtxt('../bifurcagym/envs/continuous_time_chaos/ks_files/u3.dat'))
-        state = EnvState(u=u_S,
-                         time=0)  # TODO is this okay?
+        state = EnvState(u=u_S, time=0)
+
         return self.get_obs(state), state
 
-    def get_obs(self, state: EnvState, key=None):
-        return state.u[5::self.x_S.shape[0] // self.s_dim]
+    def reward_function(self,
+                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
+                        state_t: EnvState,
+                        state_tp1: EnvState,
+                        key: chex.PRNGKey = None,
+                        ) -> chex.Array:
+        reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
+
+        return reward
+
+    def get_obs(self, state: EnvState, key: chex.PRNGKey = None):
+        return state.u[5::self.x_S.shape[0] // self.state_dim]
+
+    def get_state(self, obs: chex.Array) -> EnvState:
+        return EnvState(u=obs[0], time=-1)
 
     def is_done(self, state: EnvState):
         return jnp.array(False)

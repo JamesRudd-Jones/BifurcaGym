@@ -1,11 +1,11 @@
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from bifurcagym.envs import base_env
-from gymnax.environments import spaces
+from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 import chex
-import jax
 
 
 @struct.dataclass
@@ -24,9 +24,6 @@ class TentMapDSDA(base_env.BaseEnvironment):
         self.fixed_point: float = self.init_mu / (self.init_mu + 1)  # TODO is this true?
 
         self.reward_ball: float = 0.001
-        self.max_control: float = 0.1
-        self.horizon: int = 200
-        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
         self.discretisation = 100 + 1
         self.ref_vector: jnp.ndarray = jnp.linspace(0, 1, self.discretisation)
 
@@ -35,12 +32,17 @@ class TentMapDSDA(base_env.BaseEnvironment):
         self.random_start_range_lower: float = 0.0
         self.random_start_range_upper: float = 1.0
 
+        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
+        self.max_control: float = 0.1
+
+        self.horizon: int = 200
+
     def step_env(self,
-                 input_action: Union[int, float, chex.Array],
+                 input_action: Union[jnp.int_, jnp.float_, chex.Array],
                  state: EnvState,
                  key: chex.PRNGKey,
-                 ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        action = self._action_convert(input_action).squeeze()
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        action = self.action_convert(input_action)
 
         new_x = (action + self.init_mu) * jnp.min(jnp.array((state.x, 1 - state.x)))
 
@@ -49,34 +51,16 @@ class TentMapDSDA(base_env.BaseEnvironment):
         reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
                 self.is_done(new_state),
                 {})
 
-    def generative_step_env(self,
-                            action: Union[int, float, chex.Array],
-                            obs: chex.Array,
-                            key: chex.PRNGKey,
-                            ) -> Tuple[chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        state = EnvState(x=obs, time=0)
-        return self.step(action, state, key)
-
-    def _action_convert(self, input_action):
-        return self.action_array[input_action] * self.max_control
-
-    def reward_function(self,
-                    input_action_t: Union[int, float, chex.Array],
-                    state_t: EnvState,
-                    state_tp1: EnvState,
-                    key: chex.PRNGKey,
-                    ) -> chex.Array:
-        """
-        As per the paper titled: Optimal chaos control through reinforcement learning
-        """
-        reward = -jnp.abs(state_tp1.x - self.fixed_point) ** 2
-        # The above can set more specific norm distances
-        return reward
+    def _projection(self, s):
+        s = jnp.repeat(s, self.ref_vector.shape[0])
+        inter = jnp.abs(self.ref_vector - s)
+        return jnp.argmin(inter)
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
@@ -91,30 +75,40 @@ class TentMapDSDA(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    def projection(self, s):
-        s = jnp.repeat(s, self.ref_vector.shape[0])
-        inter = jnp.abs(self.ref_vector - s)
-        return jnp.argmin(inter, keepdims=True)
+    def reward_function(self,
+                    input_action_t: Union[int, float, chex.Array],
+                    state_t: EnvState,
+                    state_tp1: EnvState,
+                    key: chex.PRNGKey = None,
+                    ) -> chex.Array:
+        reward = -jnp.abs(state_tp1.x - self.fixed_point) ** 2
+        # The above can set more specific norm distances
+
+        return reward
+
+    def action_convert(self,
+                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        return self.action_array[action] * self.max_control
 
     def get_obs(self, state: EnvState, key=None) -> chex.Array:
-        return self.projection(state.x)
+        return jnp.array((self._projection(state.x),))
 
-    def is_done(self, state: EnvState) -> jnp.ndarray:
+    def get_state(self, obs: chex.Array) -> EnvState:
+        return EnvState(x=obs[0], time=0)
+
+    def is_done(self, state: EnvState) -> chex.Array:
         return jax.lax.select(jnp.abs(state.x - self.fixed_point) < self.reward_ball,
                               jnp.array(True),
                               jnp.array(False))
 
     @property
     def name(self) -> str:
-        """Environment name."""
         return "TentcMap-v0"
 
     def action_space(self) -> spaces.Discrete:
-        """Action space of the environment."""
         return spaces.Discrete(len(self.action_array))
 
     def observation_space(self) -> spaces.Discrete:
-        """Observation space of the environment."""
         return spaces.Discrete(self.discretisation)
 
 
@@ -122,12 +116,11 @@ class TentMapCSDA(TentMapDSDA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-    def get_obs(self, state: EnvState, key=None) -> chex.Array:
-        return state.x
+    def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
+        return jnp.array((state.x,))
 
     def observation_space(self) -> spaces.Box:
-        """Observation space of the environment."""
-        return spaces.Box(0.0, 1.0, (1,), dtype=jnp.float32)
+        return spaces.Box(0.0, 1.0, (1,), dtype=jnp.float64)
 
 
 class TentMapCSCA(TentMapCSDA):
@@ -138,5 +131,4 @@ class TentMapCSCA(TentMapCSDA):
         return jnp.clip(input_action, -self.max_control, self.max_control)
 
     def action_space(self) -> spaces.Box:
-        """Action space of the environment."""
-        return spaces.Box(-self.max_control, self.max_control, shape=(1,))
+        return spaces.Box(-self.max_control, self.max_control, shape=(1,), dtype=jnp.float64)

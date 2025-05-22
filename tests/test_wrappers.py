@@ -14,15 +14,15 @@ import copy
 
 env_names = [
              # "Acrobot-v0",
-             "Pendulum-v0",
-             # "PilcoCartPole-v0",
+             # "Pendulum-v0",
+             "PilcoCartPole-v0",
              # "HenonMap-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
              ]
 cont_state = [True]#, False]
 cont_action = [True]#, False]
-normalised = [True]#, False]
+normalised = [True, False]
 
 all_combinations = list(itertools.product(env_names,
                                           cont_state,
@@ -72,50 +72,10 @@ class TestWrapper:
         chex.assert_trees_all_close(w_reward, w_reward_t, atol=self.error)
         chex.assert_trees_all_close(reward_t, w_reward_t, atol=self.error)
 
-    # def test_normal(self, env_name, cont_state, cont_action, normalised):
-    #     try:
-    #         key, _key = jrandom.split(self.key)
-    #         env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
-    #                               normalised=False, autoreset=False)
-    #         wrapped_env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
-    #                                       normalised=normalised, autoreset=False)
-    #         # Loop over test episodes
-    #         for _ in range(self.num_episodes):
-    #             obs, env_state = env.reset(_key)
-    #             w_obs, w_env_state = wrapped_env.reset(_key)
-    #             if normalised:
-    #                 self._test_normalised_obs(wrapped_env, obs, w_obs)
-    #             for _ in range(self.num_steps):
-    #                 key, _key = jrandom.split(key)
-    #                 action = env.action_space().sample(_key)
-    #                 w_action = wrapped_env.action_space().sample(_key)
-    #                 key, _key = jrandom.split(key)
-    #                 nobs, delta_obs, nenv_state, rew, done, info = env.step(action, env_state, _key)
-    #                 w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.step(w_action, w_env_state, _key)
-    #
-    #                 if normalised:
-    #                     self._test_normalised_obs(wrapped_env, nobs, w_nobs)
-    #
-    #                 self._test_delta_obs(wrapped_env, obs, nobs, delta_obs, w_obs, w_nobs, w_delta_obs, normalised)
-    #
-    #                 self._test_rew_fn(rew, action, env_state, nenv_state, w_rew, w_action, w_env_state, w_nenv_state,
-    #                                   env, wrapped_env, _key)
-    #
-    #                 obs = copy.deepcopy(nobs)
-    #                 w_obs = copy.deepcopy(w_nobs)
-    #                 env_state = copy.deepcopy(nenv_state)
-    #                 w_env_state = copy.deepcopy(w_nenv_state)
-    #
-    #                 if done:
-    #                     break
-    #
-    #     except ValueError as e:
-    #         print(f"Caught expected ValueError for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
-    #         pytest.skip(f"Skipping test due to expected ValueError: {e}")
-    #     except Exception as e:
-    #         pytest.fail(f"Unexpected error during test_normal for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
+    def _test_apply_delta_obs(self, env, obs, delta_obs, nobs):
+        chex.assert_trees_all_close(nobs, env.apply_delta_obs(obs, delta_obs), atol=self.error)
 
-    def test_genstep(self, env_name, cont_state, cont_action, normalised):
+    def test_normal(self, env_name, cont_state, cont_action, normalised):
         try:
             key, _key = jrandom.split(self.key)
             env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
@@ -132,23 +92,9 @@ class TestWrapper:
                     key, _key = jrandom.split(key)
                     action = env.action_space().sample(_key)
                     w_action = wrapped_env.action_space().sample(_key)
-
-                    with jax.disable_jit():
-                        key, _key = jrandom.split(key)
-                        nobs, delta_obs, nenv_state, rew, done, info = env.step(action, env_state, _key)
-                        if normalised and cont_state:
-                            w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action,
-                                                                                                                   wrapped_env.normalise_obs(obs),
-                                                                                                                   _key)
-                            # Generally if we normalise then the obs that get fed in are also normalised I think
-                            # Equivalent to the aboe is feeding in w_obs as this should be the same as normalised(obs)
-                        elif not cont_state:
-                            w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action,
-                                                                                                      env_state.x,
-                                                                                                      _key)
-                            # TODO a dodgy fix for now due to the discretisation thing with get_obs
-                        else:
-                            w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action, obs, _key)
+                    key, _key = jrandom.split(key)
+                    nobs, delta_obs, nenv_state, rew, done, info = env.step(action, env_state, _key)
+                    w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.step(w_action, w_env_state, _key)
 
                     if normalised:
                         self._test_normalised_obs(wrapped_env, nobs, w_nobs)
@@ -158,6 +104,8 @@ class TestWrapper:
                     self._test_rew_fn(rew, action, env_state, nenv_state, w_rew, w_action, w_env_state, w_nenv_state,
                                       env, wrapped_env, _key)
 
+                    self._test_apply_delta_obs(env, obs, delta_obs, nobs)
+                    self._test_apply_delta_obs(wrapped_env, w_obs, w_delta_obs, w_nobs)
 
                     obs = copy.deepcopy(nobs)
                     w_obs = copy.deepcopy(w_nobs)
@@ -168,12 +116,70 @@ class TestWrapper:
                         break
 
         except ValueError as e:
-            print(
-                f"Caught expected ValueError for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
+            print(f"Caught expected ValueError for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
             pytest.skip(f"Skipping test due to expected ValueError: {e}")
         except Exception as e:
-            pytest.fail(
-                f"Unexpected error during test_genstep for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
+            pytest.fail(f"Unexpected error during test_normal for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
+
+    # def test_genstep(self, env_name, cont_state, cont_action, normalised):
+    #     try:
+    #         key, _key = jrandom.split(self.key)
+    #         env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+    #                               normalised=False, autoreset=False)
+    #         wrapped_env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action,
+    #                                       normalised=normalised, autoreset=False)
+    #         # Loop over test episodes
+    #         for _ in range(self.num_episodes):
+    #             obs, env_state = env.reset(_key)
+    #             w_obs, w_env_state = wrapped_env.reset(_key)
+    #             if normalised:
+    #                 self._test_normalised_obs(wrapped_env, obs, w_obs)
+    #             for _ in range(self.num_steps):
+    #                 key, _key = jrandom.split(key)
+    #                 action = env.action_space().sample(_key)
+    #                 w_action = wrapped_env.action_space().sample(_key)
+    #
+    #                 with jax.disable_jit():
+    #                     key, _key = jrandom.split(key)
+    #                     nobs, delta_obs, nenv_state, rew, done, info = env.step(action, env_state, _key)
+    #                     if normalised and cont_state:
+    #                         w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action,
+    #                                                                                                                wrapped_env.normalise_obs(obs),
+    #                                                                                                                _key)
+    #                         # Generally if we normalise then the obs that get fed in are also normalised I think
+    #                         # Equivalent to the aboe is feeding in w_obs as this should be the same as normalised(obs)
+    #                     elif not cont_state:
+    #                         w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action,
+    #                                                                                                   env_state.x,
+    #                                                                                                   _key)
+    #                         # TODO a dodgy fix for now due to the discretisation thing with get_obs
+    #                     else:
+    #                         w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.generative_step(w_action, obs, _key)
+    #
+    #                 if normalised:
+    #                     self._test_normalised_obs(wrapped_env, nobs, w_nobs)
+    #
+    #                 self._test_delta_obs(wrapped_env, obs, nobs, delta_obs, w_obs, w_nobs, w_delta_obs, normalised)
+    #
+    #                 self._test_rew_fn(rew, action, env_state, nenv_state, w_rew, w_action, w_env_state, w_nenv_state,
+    #                                   env, wrapped_env, _key)
+    #
+    #
+    #                 obs = copy.deepcopy(nobs)
+    #                 w_obs = copy.deepcopy(w_nobs)
+    #                 env_state = copy.deepcopy(nenv_state)
+    #                 w_env_state = copy.deepcopy(w_nenv_state)
+    #
+    #                 if done:
+    #                     break
+    #
+    #     except ValueError as e:
+    #         print(
+    #             f"Caught expected ValueError for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
+    #         pytest.skip(f"Skipping test due to expected ValueError: {e}")
+    #     except Exception as e:
+    #         pytest.fail(
+    #             f"Unexpected error during test_genstep for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
 
     # def test_autoreset(self, env_name, cont_state, cont_action, normalised):
     #     try:

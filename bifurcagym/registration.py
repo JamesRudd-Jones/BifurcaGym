@@ -10,7 +10,6 @@ from bifurcagym.envs.discrete_time_chaos import (logistic_map,
                                                  tent_map,
                                                  )
 from bifurcagym.wrappers import (AutoResetWrapper,
-                                 DeltaObsWrapper,
                                  NormalisedWrapperCSDA,
                                  NormalisedWrapperCSCA,
                                  PeriodicWrapper,
@@ -21,13 +20,11 @@ def make(env_id: str,
          cont_state=False,
          cont_action=False,
          normalised=False,
-         # delta_obs=False,
          autoreset=False,
          **env_kwargs):
 
     if env_id not in registered_envs:
-        raise ValueError(f"{env_id} is not in registered xxx environments.")
-    # TODO fill the above with package name
+        raise ValueError(f"{env_id} is not in registered environments.")
 
     # # # Classical Control
     ####################################################################################################################
@@ -108,7 +105,6 @@ def make(env_id: str,
 
     # # # Normalises the observation and action space  # TODO can we do reward space as well?
     ####################################################################################################################
-    # if normalised and not delta_obs:
     if normalised:
         if not cont_state and not cont_action:
             raise ValueError("Can't Normalise Discrete State Discrete Action.")
@@ -119,7 +115,7 @@ def make(env_id: str,
         else:
             raise ValueError("No Normalise Wrapper for Discrete State Continuous Action.")
 
-    # # # Enables an autoresetting environment that works well with Jax, not necessary for a for loop with conditionals
+    # # # Enables an autoresetting environment that works well with Jax, but not necessary for a for loop with conditionals that can't be Jitted
     ####################################################################################################################
     if autoreset:
         env = AutoResetWrapper(env)

@@ -1,4 +1,5 @@
 from bifurcagym.envs import base_env, utils
+from bifurcagym.envs.base_env import EnvState
 from bifurcagym.envs.classical_control import (acrobot,
                                                pendulum,
                                                pilco_cartpole,

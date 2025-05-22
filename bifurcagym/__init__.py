@@ -1,4 +1,4 @@
-from bifurcagym import envs, registration
+from bifurcagym import envs, registration, spaces
 
 
 make = registration.make

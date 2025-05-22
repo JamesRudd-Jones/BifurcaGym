@@ -1,51 +1,48 @@
-from gymnax.environments import spaces
-from copy import deepcopy
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-import jax
 from functools import partial
 import chex
-from typing import Any, Dict, Generic, Optional, Tuple, TypeVar, Union, overload
-from bifurcagym.envs import base_env
-from bifurcagym.envs.base_env import EnvState
+from typing import Any, Dict, Tuple, Union
+from bifurcagym.envs import EnvState
 
 
 class AutoResetWrapper(object):
-    def __init__(self, wautoreset_env):
+    def __init__(self, wrapped_autoreset_env):
         """
         Automatically resets envs that are done, greatly inspired by the following from Gymnax
         https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/environment.py
 
-        Also taking insight from Brax:
+        And also from Brax:
         https://github.com/google/brax/blob/main/brax/envs/wrappers/training.py
         """
 
-        self._wautoreset_env = wautoreset_env
+        self._wrapped_autoreset_env = wrapped_autoreset_env
 
     @property
-    def wautoreset_env(self):
-        return self._wautoreset_env
+    def wrapped_autoreset_env(self):
+        return self._wrapped_autoreset_env
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
-             action: Union[int, float, chex.Array],
+             action: Union[jnp.int_, jnp.float_, chex.Array],
              state: EnvState,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        obs_st, delta_obs_st, state_st, reward, done, info = self._wautoreset_env.step(action, state, key)
+        obs_st, delta_obs_st, state_st, reward, done, info = self._wrapped_autoreset_env.step(action, state, key)
         key, key_reset = jrandom.split(key)
-        obs_re, state_re = self._wautoreset_env.reset(key_reset)
+        obs_re, state_re = self._wrapped_autoreset_env.reset(key_reset)
         # Auto-reset environment based on termination
         state = jax.tree.map(lambda x, y: jax.lax.select(done, x, y), state_re, state_st)
         obs = jax.lax.select(done, obs_re, obs_st)
         delta_obs = jax.lax.select(done, jnp.zeros_like(delta_obs_st), delta_obs_st)
-        # TODO unsure if this best approach will think about it more concretley
+        # TODO unsure if this best approach will think about it more concretely
         return obs, delta_obs, state, reward, done, info
 
     def __getattr__(self, attr):
-        if attr == "_wautoreset_env":
+        if attr == "_wrapped_autoreset_env":
             raise AttributeError()
-        return getattr(self._wautoreset_env, attr)
+        return getattr(self._wrapped_autoreset_env, attr)
 
     def __str__(self):
-        return "{}({})".format(type(self).__name__, self.wautoreset_env)
+        return "{}({})".format(type(self).__name__, self.wrapped_autoreset_env)
