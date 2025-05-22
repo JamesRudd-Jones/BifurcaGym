@@ -1,3 +1,9 @@
+"""
+An env ported to Jax based off of the following work:
+https://royalsocietypublishing.org/doi/full/10.1098/rspa.2019.0351
+"""
+
+
 import jax
 import jax.numpy as jnp
 import numpy as np

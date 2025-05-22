@@ -32,9 +32,6 @@ class HenonMapCSCA(base_env.BaseEnvironment):
         self.fixed_point: jnp.ndarray = jnp.array((0.631354477,
                                                    0.189406343))
 
-        self.action_array: jnp.ndarray = jnp.array(((0.0, 0.0), (0.0, 1.0), (0.0, -1.0),
-                                                    (1.0, 0.0), (1.0, 1.0), (1.0, -1.0),
-                                                    (-1.0, 0.0), (-1.0, 1.0), (-1.0, -1.0)))
         self.max_control: float = 0.1
 
         self.horizon: int = 200
@@ -120,6 +117,10 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 class HenonMapCSDA(HenonMapCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.action_array: jnp.ndarray = jnp.array(((0.0, 0.0), (0.0, 1.0), (0.0, -1.0),
+                                                    (1.0, 0.0), (1.0, 1.0), (1.0, -1.0),
+                                                    (-1.0, 0.0), (-1.0, 1.0), (-1.0, -1.0)))
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:

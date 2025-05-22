@@ -40,7 +40,6 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         self.random_start_range_lower: float = 0.0
         self.random_start_range_upper: float = 1.0
 
-        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
         self.max_control: float = 0.1
 
         self.horizon: int = 200
@@ -121,6 +120,8 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
 class LogisticMapCSDA(LogisticMapCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
