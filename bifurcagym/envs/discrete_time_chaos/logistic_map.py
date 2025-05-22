@@ -14,7 +14,7 @@ class EnvState(base_env.EnvState):
     time: int
     
 
-class LogisticMapDSDA(base_env.BaseEnvironment):
+class LogisticMapCSCA(base_env.BaseEnvironment):
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
@@ -34,8 +34,6 @@ class LogisticMapDSDA(base_env.BaseEnvironment):
         # TODO a calc for period fixed point but be good to generalise to more
 
         self.reward_ball: float = 0.001
-        self.discretisation = 100 + 1
-        self.ref_vector: jnp.ndarray = jnp.linspace(0, 1, self.discretisation)
 
         self.start_point: float = 0.1
         self.random_start: bool = True
@@ -67,11 +65,6 @@ class LogisticMapDSDA(base_env.BaseEnvironment):
                 self.is_done(new_state),
                 {})
 
-    def _projection(self, s):
-        s = jnp.repeat(s, self.ref_vector.shape[0])
-        inter = jnp.abs(self.ref_vector - s)
-        return jnp.argmin(inter)
-
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
         same_state = EnvState(x=jnp.array(self.start_point), time=0)
@@ -101,10 +94,10 @@ class LogisticMapDSDA(base_env.BaseEnvironment):
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action] * self.max_control
+        return jnp.clip(action, -self.max_control, self.max_control).squeeze()
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
-        return jnp.array((self._projection(state.x),))
+        return jnp.array((state.x,))
 
     def get_state(self, obs: chex.Array) -> EnvState:
         return EnvState(x=obs[0], time=-1)
@@ -118,31 +111,51 @@ class LogisticMapDSDA(base_env.BaseEnvironment):
     def name(self) -> str:
         return "LogisticMap-v0"
 
-    def action_space(self) -> spaces.Discrete:
-        return spaces.Discrete(len(self.action_array))
-
-    def observation_space(self) -> spaces.Discrete:
-        return spaces.Discrete(self.discretisation)
-
-
-class LogisticMapCSDA(LogisticMapDSDA):
-    def __init__(self, **env_kwargs):
-        super().__init__(**env_kwargs)
-
-    def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
-        return jnp.array((state.x,))
+    def action_space(self) -> spaces.Box:
+        return spaces.Box(-self.max_control, self.max_control, shape=(1,), dtype=jnp.float64)
 
     def observation_space(self) -> spaces.Box:
         return spaces.Box(0.0, 1.0, (1,), dtype=jnp.float64)
 
 
-class LogisticMapCSCA(LogisticMapCSDA):
+class LogisticMapCSDA(LogisticMapCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return jnp.clip(action, -self.max_control, self.max_control).squeeze()
+        return self.action_array[action] * self.max_control
 
-    def action_space(self) -> spaces.Box:
-        return spaces.Box(-self.max_control, self.max_control, shape=(1,), dtype=jnp.float64)
+    def action_space(self) -> spaces.Discrete:
+        return spaces.Discrete(len(self.action_array))
+
+
+class LogisticMapDSDA(LogisticMapCSDA):
+    def __init__(self, **env_kwargs):
+        super().__init__(**env_kwargs)
+
+        self.discretisation = 100 + 1
+        self.ref_vector: jnp.ndarray = jnp.linspace(0, 1, self.discretisation)
+
+    def generative_step(self,
+                        action: Union[jnp.int_, jnp.float_, chex.Array],
+                        gen_obs: chex.Array,
+                        key: chex.PRNGKey,
+                        ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        raise ValueError(f"No Generative Step for {self.name} Discrete State.")
+
+    def _projection(self, s):
+        s = jnp.repeat(s, self.ref_vector.shape[0])
+        inter = jnp.abs(self.ref_vector - s)
+        return jnp.argmin(inter)
+
+    def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
+        return jnp.array((self._projection(state.x),))
+
+    def observation_space(self) -> spaces.Discrete:
+        return spaces.Discrete(self.discretisation)
+
+
+
+
+

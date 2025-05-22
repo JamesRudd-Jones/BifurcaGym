@@ -1,11 +1,12 @@
-# Chaotax
+# BifurcaGym
 
-## Ideally a better name, chaoticgym?, others?
+## Maybe a better name?
 
 Current envs that work:
 - Pendulum
 - Pilco Cartpole
 - Logistic Map
+- Tent Map
 
 How do we define discrete or continuous actions, some discretisation scheme easily?
 Good to explain that here
@@ -26,15 +27,10 @@ What envs do we provide:
 - N-Pendulum (aka like double pendulum and greater)
 - Three body problem
 
-Check the PhD thesis to get a summary of all the envs
-
 Would be great to have a render option for all that can be done in eval stages, or perhaps some jittable gif saver?
-
-Having some wrappers be ideal, for example some that normalise the env etc etc
 
 
 # TODOs
 
-Update reward_func to be called reward_function everywhere
 I think there way may be a better way to do the wrappers rather than so much duplicate code
-Should we have state space and observation space as well?
+Should we have state space alongside the observation space?

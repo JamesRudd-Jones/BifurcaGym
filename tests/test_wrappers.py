@@ -14,14 +14,14 @@ import copy
 
 env_names = [
              # "Acrobot-v0",
-             # "Pendulum-v0",
+             "Pendulum-v0",
              "PilcoCartPole-v0",
              # "HenonMap-v0",
-             # "LogisticMap-v0",
-             # "TentMap-v0",
+             "LogisticMap-v0",
+             "TentMap-v0",
              ]
-cont_state = [True]#, False]
-cont_action = [True]#, False]
+cont_state = [True, False]
+cont_action = [True, False]
 normalised = [True, False]
 
 all_combinations = list(itertools.product(env_names,
