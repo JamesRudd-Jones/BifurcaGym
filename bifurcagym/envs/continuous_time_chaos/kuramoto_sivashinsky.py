@@ -71,7 +71,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         # ref: http://journals.ametsoc.org/doi/pdf/10.1175/MWR3214.1
         u_K = jnp.fft.rfft(state.u, axis=-1)
         f_K = jnp.fft.rfft(f0_S, axis=-1)
-        u_save_K = u_K.copy()  # TODO is this required?
+        u_save_K = u_K.copy()
 
         def _runge_kutta_update(runner, unused):
             u_K, ind = runner
@@ -126,6 +126,70 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
     def is_done(self, state: EnvState):
         return jnp.array(False)
+
+    def render_traj(self, trajectory_state: EnvState):
+        import matplotlib.pyplot as plt
+        import matplotlib.animation as animation
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.set_title(self.name)
+        ax.set_xlim(trajectory_state.time[0], trajectory_state.time[-1])
+        ax.set_xlabel("Time")
+        ax.set_ylabel("x")
+
+        v_min = float(trajectory_state.u.min())
+        v_max = float(trajectory_state.u.max())
+
+        im = ax.imshow(np.zeros((trajectory_state.time[0], trajectory_state.time[-1])).T,
+                       cmap='viridis',
+                       origin='lower',
+                       vmin=v_min,
+                       vmax=v_max)
+        cbar = fig.colorbar(im, ax=ax, orientation='vertical', pad=0.05, shrink=0.5, label="U Value")
+
+        def update(frame):
+            ax.clear()
+
+            im = ax.imshow(trajectory_state.u[:frame].T,
+                           cmap='viridis',
+                           origin='lower',
+                           vmin=v_min,
+                           vmax=v_max)
+            # cbar = fig.colorbar(im, ax=ax, orientation='vertical', pad=0.05, shrink=0.75, label="U Value")
+            # TODO adding the above in causes some crazy animation, it is fun though so I have left in for your experience
+
+            # Set the limits again, or you can adjust them dynamically as needed
+            ax.set_title(self.name)
+            ax.set_xlim(trajectory_state.time[0], trajectory_state.time[-1])
+            ax.set_xlabel("Time")
+            ax.set_ylabel("x")
+
+            return im,
+
+        # Create the animation
+        anim = animation.FuncAnimation(fig,
+                                       update,
+                                       frames=len(trajectory_state.time),
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       blit=True
+                                       )
+        anim.save(f"../animations/{self.name}.gif")
+        plt.close()
+
+        # # Plotting the heatmap
+        # plt.figure(figsize=(12, 8))
+        # plt.imshow(trajectory_state.u[0:2].T,  # Transpose for spatial dimension on y-axis
+        #            aspect='auto',
+        #            origin='lower',  # Ensure y-axis starts at the bottom
+        #            cmap='viridis',  # Use 'viridis' colormap
+        #            # extent=[time_points[0], time_points[-1], spatial_coords[0], spatial_coords[-1]]
+        #            )
+        #
+        # plt.colorbar(label='u(x, t)')  # Add a colorbar with a label
+        # plt.xlabel('Time (t)')  # Label x-axis as Time
+        # plt.ylabel('Spatial Coordinate (x)')  # Label y-axis as Spatial Coordinate
+        # plt.title('Spatio-temporal Evolution of u(x,t)')  # Give the plot a title
+        # plt.show()
 
     @property
     def name(self) -> str:

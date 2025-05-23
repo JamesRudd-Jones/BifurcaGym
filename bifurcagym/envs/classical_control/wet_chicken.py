@@ -1,5 +1,7 @@
 """
 Based off the following: https://github.com/LAVA-LAB/improved_spi/blob/main/wetChicken.py
+
+A 2D extension from: "https://www.researchgate.net/publication/221079849_Efficient_Uncertainty_Propagation_for_Reinforcement_Learning_with_Limited_Data"
 """
 
 import jax
@@ -20,8 +22,6 @@ class EnvState(base_env.EnvState):
 
 
 class WetChickenCSCA(base_env.BaseEnvironment):
-    # Implements the 2-dimensional Wet Chicken benchmark from 'Efficient Uncertainty Propagation for
-    # Reinforcement Learning with Limited Data' by Alexander Hans and Steffen Udluft
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
@@ -29,6 +29,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
         self.length: float = 5.0
         self.width: float = 5.0
         self.max_turbulence: float = 3.5
+        self.turbulence_noise:float = 1.0
         self.max_velocity: float = 3.0
 
         self.max_action: float = 1.0
@@ -41,7 +42,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action)
 
-        y_hat = state.y + (action[1] - 1.0) + self._velocity(state) + self._turbulence(state) * jrandom.uniform(key, minval=-1, maxval=1)
+        y_hat = state.y + action[1] + self._velocity(state) + self._turbulence(state, key)
         x_hat = state.x + action[0]
 
         # if y_hat >= self.length or x_hat < 0:
@@ -74,11 +75,13 @@ class WetChickenCSCA(base_env.BaseEnvironment):
                 self.is_done(new_state),
                 {})
 
-    def _velocity(self, state):
+    def _velocity(self, state: EnvState) -> chex.Array:
         return self.max_velocity * state.x / self.width
 
-    def _turbulence(self, state):
-        return self.max_turbulence - self._velocity(state)
+    def _turbulence(self, state: EnvState, key: chex.PRNGKey) -> chex.Array:
+        return (self.max_turbulence - self._velocity(state)) * jrandom.uniform(key,
+                                                                               minval=-self.turbulence_noise,
+                                                                               maxval=self.turbulence_noise)
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         state = EnvState(x=jnp.zeros(()),
@@ -93,7 +96,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
                         ) -> chex.Array:
-        return -(self.length - state_tp1.y)  # TODO pretty sure its the new state y_t
+        return -(self.length - state_tp1.y)
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -106,7 +109,96 @@ class WetChickenCSCA(base_env.BaseEnvironment):
         return EnvState(x=obs[0], y=obs[1], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
-        return jnp.array(False)  # TODO not sure about this as pretty sure it auto resets
+        return jnp.array(False)  # a continuous task as the environment auto resets as part of the setup
+
+    def render_traj(self, trajectory_state: EnvState):
+        import matplotlib.pyplot as plt
+        import matplotlib.animation as animation
+        from matplotlib.colors import LogNorm, Normalize
+
+        grid_resolution = 50
+        x_grid = jnp.linspace(0, self.width, grid_resolution)
+        y_grid = jnp.linspace(0, self.length, grid_resolution)
+        X, Y = jnp.meshgrid(x_grid, y_grid)
+
+        vx_grid = jnp.linspace(0, self.width, 8)
+        vy_grid = jnp.linspace(0, self.length, 6)
+        VX, VY = jnp.meshgrid(vx_grid, vy_grid)
+
+        def turb_plots(x, y, key):
+            state = EnvState(x=x, y=y, time=-1)
+            return self._turbulence(state, key)
+
+        def vel_plots(x, y):
+            state = EnvState(x=x, y=y, time=-1)
+            return self._velocity(state)
+
+        key = jrandom.key(0)
+        batch_key = jrandom.split(key, grid_resolution * grid_resolution).reshape(grid_resolution, grid_resolution)
+        turb_plot = jax.vmap(jax.vmap(turb_plots, in_axes=(0, None, 0)), in_axes=(None, 0, 0))(x_grid, y_grid, batch_key)
+        vel_plot = jax.vmap(jax.vmap(vel_plots, in_axes=(0, None)), in_axes=(None, 0))(vx_grid, vy_grid)
+
+        fig, ax = plt.subplots(figsize=(7, 5))
+        ax.set_title(self.name)
+        ax.set_xlim(0, self.width)
+        ax.set_xlabel("X")
+        ax.set_ylim(0, self.length)
+        ax.set_ylabel("Y")
+        ax.set_aspect('equal')
+        ax.axhline(y=self.length, color="blue", label="Waterfall", linewidth=5)
+        ax.legend(bbox_to_anchor=(1.4, 1.03))
+        ax.grid(True)
+
+        # norm_turb = LogNorm(vmin=turb_plot.min(), vmax=turb_plot.max())
+        background_plot = ax.pcolormesh(X, Y, turb_plot, cmap='RdBu', shading='auto', zorder=-2, alpha=0.4)
+        cbar = fig.colorbar(background_plot, ax=ax, orientation='vertical', shrink=0.75,
+                            label='Turbulence Value' if 'vel_plot' in locals() else 'Turbulence Value')
+
+        U = jnp.zeros_like(vel_plot)
+        V = vel_plot
+        magnitude = jnp.sqrt(U ** 2 + V ** 2)
+
+        Q = ax.quiver(VX, VY, U, V,
+                      magnitude,
+                      cmap='summer_r',
+                      angles='xy', scale_units='xy', scale=3, zorder=-1)
+
+        cbar = fig.colorbar(Q, ax=ax, orientation='vertical', pad=0.05, shrink=0.75)
+        cbar.set_label('Velocity Magnitude')
+        # qk = ax.quiverkey(Q, 0.9, 0.9, 1, r'$1 \frac{m}{s}$', labelpos='E', coordinates='axes')
+
+        line, = ax.plot([], [], 'r-', lw=1.5, label='Agent Trail')
+        dot, = ax.plot([], [], color="purple", marker="o", markersize=12, label='Current State')
+
+        agent_path_history = jnp.array(((0.0,), (0.0,)))
+
+        def update(frame):
+            global agent_path_history
+
+            x = jnp.expand_dims(trajectory_state.x[frame], axis=0)
+            y = jnp.expand_dims(trajectory_state.y[frame], axis=0)
+
+            if x == 0.0 and y == 0.0:
+                agent_path_history = jnp.array(((0.0,), (0.0,)))
+            else:
+                xy = jnp.concatenate((jnp.expand_dims(x, 0), jnp.expand_dims(y, 0)))
+                agent_path_history = jnp.concatenate((agent_path_history, xy), axis=-1)
+
+            dot.set_data(x, y)
+
+            line.set_data(agent_path_history[0], agent_path_history[1])
+
+            return  line, dot
+
+        # Create the animation
+        anim = animation.FuncAnimation(fig,
+                                       update,
+                                       frames=len(trajectory_state.time),
+                                       interval=600,
+                                       blit=True
+                                       )
+        anim.save(f"../animations/{self.name}.gif")
+        plt.close()
 
     @property
     def name(self) -> str:
@@ -117,7 +209,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
 
     def observation_space(self) -> spaces.Box:
         low = jnp.array([0, 0])
-        high = jnp.array([self.length, self.width])  # TODO check the ordering
+        high = jnp.array([self.width, self.length])
         return spaces.Box(low, high, (2,))
 
 
@@ -125,11 +217,11 @@ class WetChickenCSDA(WetChickenCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.action_array: chex.Array = jnp.array(((0.0, 0.0),
-                                                   (-1.0, 0.0),
-                                                   (-2.0, 0.0),
-                                                   (0.0, -1.0),
-                                                   (0.0, 1.0),
+        self.action_array: chex.Array = jnp.array(((0.0, 0.0),   # Drift
+                                                   (0.0, -1.0),  # Hold
+                                                   (0.0, -2.0),  # Paddle back
+                                                   (1.0, 0.0),   # Right
+                                                   (-1.0, 0.0),  # Left
                                                    ))
 
     def action_convert(self,
@@ -140,24 +232,49 @@ class WetChickenCSDA(WetChickenCSCA):
         return spaces.Discrete(len(self.action_array))
 
 
-    # TODO add in WetChicken Discrete State
+class WetChickenDSDA(WetChickenCSDA):
+    def __init__(self, **env_kwargs):
+        super().__init__(**env_kwargs)
 
+        self.length: int = 5
+        self.width: int = 5
 
-# class WetChickenDSDA(WetChickenCSDA):
-#     def __init__(self, **env_kwargs):
-#         super().__init__(**env_kwargs)
-#
-#     # if self.discrete:
-#     #     action_coordinates = list(ACTION_TRANSLATOR.values())[action]
-#     #     y_hat = self._state[1] + action_coordinates[1] + self._velocity() + self._turbulence() * np.random.uniform(
-#     #         -1, 1)
-#     #     x_hat = self._state[0] + action_coordinates[0]
-#     #     x_hat = round(x_hat)
-#     #     y_hat = round(y_hat)
-#     # else:
-#
-#     def observation_space(self) -> spaces.Discrete:
-#         return spaces.Discrete(2)  # TODO what is this actually
+    def step_env(self,
+                 input_action: Union[jnp.int_, jnp.float_, chex.Array],
+                 state: EnvState,
+                 key: chex.PRNGKey,
+                 ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        action = self.action_convert(input_action)
+
+        y_hat = jnp.round(state.y + action[1] + self._velocity(state) + self._turbulence(state, key))
+        x_hat = jnp.round(state.x + action[0])
+
+        x_new_cond1 = jnp.where(x_hat > (self.width - 1), (self.width - 1), x_hat)
+        x_new = jnp.where(jnp.logical_or(y_hat >= self.length, x_hat < 0), 0, x_new_cond1)
+
+        y_new = jnp.where(jnp.logical_or(y_hat >= self.length, y_hat < 0), 0, y_hat)
+
+        new_state = EnvState(x=x_new, y=y_new, time=state.time+1)
+
+        reward = self.reward_function(input_action, state, new_state, key)
+
+        return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
+                jax.lax.stop_gradient(new_state),
+                reward,
+                self.is_done(new_state),
+                {})
+
+    def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
+        return jnp.array([state.x + state.y * self.width,])
+
+    def get_state(self, obs: chex.Array) -> EnvState:
+        y = obs // self.width
+        x = obs % self.width
+        return EnvState(x=x.squeeze(), y=y.squeeze(), time=-1)
+
+    def observation_space(self) -> spaces.Discrete:
+        return spaces.Discrete(self.width * self.length)
 
 
 def plot_some_stuff():
@@ -351,4 +468,25 @@ def plot_2d_stuff():
 
 if __name__ == "__main__":
     # plot_some_stuff()
-    plot_2d_stuff()
+    # plot_2d_stuff()
+
+    key = jrandom.PRNGKey(0)
+    env = WetChickenCSCA()
+
+    num_steps = 200  # Fixed number of steps per episode
+
+    key, _key = jrandom.split(key)
+    obs, env_state = env.reset(_key)
+
+    def _loop_func(runner_state, unused):
+        obs, env_state, key = runner_state
+        key, _key = jrandom.split(key)
+        action = env.action_space().sample(_key)
+        key, _key = jrandom.split(key)
+        nobs, delta_obs, next_env_state, rew, done, info = env.step(action, env_state, _key)
+
+        return (nobs, next_env_state, key), env_state
+
+    _, traj = jax.lax.scan(_loop_func, (obs, env_state, key), None, num_steps)
+
+    env.render_traj(traj)

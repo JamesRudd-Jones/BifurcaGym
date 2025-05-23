@@ -98,12 +98,6 @@ class PendulumCSDA(base_env.BaseEnvironment):
         return jnp.array(False)
 
     def render_traj(self, trajectory_state: EnvState):
-        """Render the pendulum's trajectory as an animation.
-
-        Args:
-            trajectory: A chex.Array of shape (n_steps, 2), where each row
-                represents the state [theta, theta_dot] at a given time step.
-        """
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
 
@@ -137,7 +131,7 @@ class PendulumCSDA(base_env.BaseEnvironment):
                                        interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
-        anim.save(f"./animations/{self.name}.gif")
+        anim.save(f"../animations/{self.name}.gif")
         plt.close()
 
     @property

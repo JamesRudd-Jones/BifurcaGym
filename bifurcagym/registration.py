@@ -51,8 +51,16 @@ def make(env_id: str,
             env = pilco_cartpole.PilcoCartPoleCSCA(**env_kwargs)
         else:
             raise ValueError("No Discrete State versions.")
-    # elif env_id == "WetChicken-v0":
-    #     env = wet_chicken.WetChicken(**env_kwargs)
+
+    elif env_id == "WetChicken-v0":
+        if cont_state and cont_action:
+            env = wet_chicken.WetChickenCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = wet_chicken.WetChickenCSDA(**env_kwargs)
+        elif not cont_state and not cont_action:
+            env = wet_chicken.WetChickenDSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State Continuous Action version.")
 
     # # # Continuous Time Chaos
     ####################################################################################################################

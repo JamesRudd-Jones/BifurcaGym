@@ -14,7 +14,15 @@ import time
 import itertools
 
 
-env_names = ["Pendulum-v0",
+env_names = [
+             # "Acrobot-v0",
+             # "Pendulum-v0",
+             # "PilcoCartPole-v0",
+             # "WetChicken-v0",
+             "KS-v0",
+             # "HenonMap-v0",
+             # "LogisticMap-v0",
+             # "TentMap-v0",
              ]
 cont_state = [True]#, False]
 cont_action = [True]#, False]
@@ -27,7 +35,7 @@ all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 class TestEnv:
     def setup_method(self):
         """Set up common test resources."""
-        self.num_steps = 100#0
+        self.num_steps = 200#0
         self.num_episodes = 100
         self.key = jrandom.PRNGKey(42)
         self.error = 1e-4
@@ -39,18 +47,21 @@ class TestEnv:
             key, _key = jrandom.split(self.key)
             env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action)
 
-            # Loop over test episodes
-            for _ in range(self.num_episodes):
-                key, _key = jrandom.split(key)
-                obs, state = env.reset(_key)
-                # Loop over test episode steps
-                for _ in range(self.num_steps):
-                    key, _key = jrandom.split(key)
-                    action = env.action_space().sample(_key)
+            key, _key = jrandom.split(key)
+            obs, env_state = env.reset(_key)
 
-                    key, _key = jrandom.split(key)
-                    obs, state, reward, done_jax, _ = env.step(action, state, _key)
-                    env.render(state)
+            def _loop_func(runner_state, unused):
+                obs, env_state, key = runner_state
+                key, _key = jrandom.split(key)
+                action = env.action_space().sample(_key)
+                key, _key = jrandom.split(key)
+                nobs, delta_obs, next_env_state, rew, done, info = env.step(action, env_state, _key)
+
+                return (nobs, next_env_state, key), env_state
+
+            _, traj = jax.lax.scan(_loop_func, (obs, env_state, key), None, self.num_steps)
+
+            env.render_traj(traj)
 
         except ValueError as e:
             print(f"Caught expected ValueError for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
