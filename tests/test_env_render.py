@@ -16,11 +16,12 @@ import itertools
 
 env_names = [
              # "Acrobot-v0",
+             # "CartPole-v0",
+             # "NCartPole-v0",
+             "Pendubot-v0",
              # "Pendulum-v0",
-             # "PilcoCartPole-v0",
              # "WetChicken-v0",
-             "KS-v0",
-             # "HenonMap-v0",
+             #  "KS-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
              ]
@@ -53,7 +54,9 @@ class TestEnv:
             def _loop_func(runner_state, unused):
                 obs, env_state, key = runner_state
                 key, _key = jrandom.split(key)
-                action = env.action_space().sample(_key)
+                # action = env.action_space().sample(_key)
+                # action = jnp.sin(0.5 * env_state.time) * 0.1 * jnp.cos(env_state.time)
+                action = jnp.ones(1,) * env.action_space().high
                 key, _key = jrandom.split(key)
                 nobs, delta_obs, next_env_state, rew, done, info = env.step(action, env_state, _key)
 

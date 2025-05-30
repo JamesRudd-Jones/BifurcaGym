@@ -1,3 +1,10 @@
+"""
+Based off https://github.com/openai/gym/blob/master/gym/envs/classic_control/acrobot.py
+and
+https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_control/acrobot.py
+"""
+
+
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -22,13 +29,13 @@ class AcrobotCSDA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.link_length_1: float = 1.0
-        self.link_length_2: float = 1.0
-        self.link_mass_1: float = 1.0
-        self.link_mass_2: float = 1.0
-        self.link_com_pos_1: float = 0.5
-        self.link_com_pos_2: float = 0.5
-        self.link_moi: float = 1.0
+        self.length_1: float = 1.0
+        self.length_2: float = 1.0
+        self.mass_1: float = 1.0
+        self.mass_2: float = 1.0
+        self.com_pos_1: float = 0.5
+        self.com_pos_2: float = 0.5
+        self.moi: float = 1.0
         self.max_vel_1: float = 4 * jnp.pi
         self.max_vel_2: float = 9 * jnp.pi
 
@@ -85,11 +92,10 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                 )
 
     def _dsdt(self, s_augmented: chex.Array, _: jnp.float_) -> chex.Array:
-        """Compute time derivative of the state change - Use for ODE int."""
-        m1, m2 = self.link_mass_1, self.link_mass_2
-        l1 = self.link_length_1
-        lc1, lc2 = self.link_com_pos_1, self.link_com_pos_2
-        i1, i2 = self.link_moi, self.link_moi
+        m1, m2 = self.mass_1, self.mass_2
+        l1 = self.length_1
+        lc1, lc2 = self.com_pos_1, self.com_pos_2
+        i1, i2 = self.moi, self.moi
         g = 9.8
         a = s_augmented[-1]
         s = s_augmented[:-1]
@@ -97,29 +103,23 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         d1 = m1 * lc1 ** 2 + m2 * (l1 ** 2 + lc2 ** 2 + 2 * l1 * lc2 * jnp.cos(theta2)) + i1 + i2
         d2 = m2 * (lc2 ** 2 + l1 * lc2 * jnp.cos(theta2)) + i2
         phi2 = m2 * lc2 * g * jnp.cos(theta1 + theta2 - jnp.pi / 2.0)
-        phi1 = (
-                -m2 * l1 * lc2 * dtheta2 ** 2 * jnp.sin(theta2)
+        phi1 = (-m2 * l1 * lc2 * dtheta2 ** 2 * jnp.sin(theta2)
                 - 2 * m2 * l1 * lc2 * dtheta2 * dtheta1 * jnp.sin(theta2)
                 + (m1 * lc1 + m2 * l1) * g * jnp.cos(theta1 - jnp.pi / 2)
                 + phi2
-        )
-        ddtheta2 = (
-                           a + d2 / d1 * phi1 - m2 * l1 * lc2 * dtheta1 ** 2 * jnp.sin(theta2) - phi2
+                )
+        ddtheta2 = (a + d2 / d1 * phi1 - m2 * l1 * lc2 * dtheta1 ** 2 * jnp.sin(theta2) - phi2
                    ) / (m2 * lc2 ** 2 + i2 - d2 ** 2 / d1)
         ddtheta1 = -(d2 * ddtheta2 + phi1) / d1
+
         return jnp.array([dtheta1, dtheta2, ddtheta1, ddtheta2, 0.0])
 
     def _wrap(self, x: jnp.float_, m: jnp.float_, big_m: jnp.float_) -> chex.Array:
-        """For example, m = -180, M = 180 (degrees), x = 360 --> returns 0."""
         diff = big_m - m
-        go_up = x < m  # Wrap if x is outside the left bound
-        go_down = x >= big_m  # Wrap if x is outside OR on the right bound
+        go_up = x < m
+        go_down = x >= big_m
 
-        how_often = go_up * jnp.ceil(
-            (m - x) / diff
-        ) + go_down * jnp.floor(  # if m - x is an integer, keep it
-            (x - big_m) / diff + 1
-        )  # if x - M is an integer, round up
+        how_often = go_up * jnp.ceil((m - x) / diff) + go_down * jnp.floor( (x - big_m) / diff + 1)
         x_out = x - how_often * diff * go_down + how_often * diff * go_up
         return x_out
 
@@ -176,6 +176,45 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         # return done
         return jnp.array(False)
 
+    def render_traj(self, trajectory_state: EnvState):
+        import matplotlib.pyplot as plt
+        import matplotlib.animation as animation
+
+        def _get_coords(theta, length):
+            return -length * jnp.sin(theta), length * jnp.cos(theta)
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax.set_title(self.name)
+        screen_lim = self.length_1 + self.length_2
+        ax.set_xlim(-screen_lim * 3, screen_lim * 3)
+        ax.set_xlabel("X")
+        ax.set_ylim(-screen_lim* 1.2, screen_lim * 1.2)
+        # ax.set_ylabel("Y")
+        ax.set_aspect('equal')
+        ax.grid(True)
+
+        line, = ax.plot([], [], 'k-', lw=3, zorder=3)
+        dot, = ax.plot([], [], color="r", marker="o", markersize=8, zorder=4, label='Current State')
+
+        def update(frame):
+            x_1, y_1 = _get_coords(trajectory_state.joint_angle_1[frame], self.length_1)
+            x_2, y_2 = _get_coords(trajectory_state.joint_angle_2[frame], self.length_2)
+
+            line.set_data([0.0, -x_1, -x_2-x_1], [0.0, -y_1, -y_2-y_1])
+            dot.set_data([-x_1-x_2], [-y_1-y_2])
+
+            return line, dot
+
+        # Create the animation
+        anim = animation.FuncAnimation(fig,
+                                       update,
+                                       frames=trajectory_state.time.shape[0],
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       blit=True
+                                       )
+        anim.save(f"../animations/{self.name}.gif")
+        plt.close()
+
     @property
     def name(self) -> str:
         return "Acrobot-v0"
@@ -199,7 +238,59 @@ class AcrobotCSCA(AcrobotCSDA):
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return jnp.clip(action, -self.max_torque, self.max_torque)
+        return jnp.clip(action, -self.max_torque, self.max_torque).squeeze()
+
+    def action_space(self) -> spaces.Box:
+        return spaces.Box(-self.max_torque, self.max_torque, shape=(1,))
+
+
+class PendubotCSDA(AcrobotCSDA):
+    """
+    The shoulder is actuated instead of the elbow.
+
+    https://underactuated.mit.edu/acrobot.html
+    https://link.springer.com/chapter/10.1007/BFb0015081
+    """
+    def __init__(self, **env_kwargs):
+        super().__init__(**env_kwargs)
+
+        self.max_torque: float = 1.0
+
+    def _dsdt(self, s_augmented: chex.Array, _: jnp.float_) -> chex.Array:
+        m1, m2 = self.mass_1, self.mass_2
+        l1 = self.length_1
+        lc1, lc2 = self.com_pos_1, self.com_pos_2
+        i1, i2 = self.moi, self.moi
+        g = 9.8
+        a = s_augmented[-1]
+        s = s_augmented[:-1]
+        theta1, theta2, dtheta1, dtheta2 = s
+        d1 = m1 * lc1 ** 2 + m2 * (l1 ** 2 + lc2 ** 2 + 2 * l1 * lc2 * jnp.cos(theta2)) + i1 + i2
+        d2 = m2 * (lc2 ** 2 + l1 * lc2 * jnp.cos(theta2)) + i2
+        phi2 = m2 * lc2 * g * jnp.cos(theta1 + theta2 - jnp.pi / 2.0)
+        phi1 = (-m2 * l1 * lc2 * dtheta2 ** 2 * jnp.sin(theta2)
+                - 2 * m2 * l1 * lc2 * dtheta2 * dtheta1 * jnp.sin(theta2)
+                + (m1 * lc1 + m2 * l1) * g * jnp.cos(theta1 - jnp.pi / 2)
+                + phi2
+                )
+        ddtheta2 = (d2 / d1 * phi1 - m2 * l1 * lc2 * dtheta1 ** 2 * jnp.sin(theta2) - phi2
+                   ) / (m2 * lc2 ** 2 + i2 - d2 ** 2 / d1)
+        ddtheta1 = -(a + d2 * ddtheta2 + phi1) / d1
+
+        return jnp.array([dtheta1, dtheta2, ddtheta1, ddtheta2, 0.0])
+
+    @property
+    def name(self) -> str:
+        return "Pendubot-v0"
+
+
+class PendubotCSCA(PendubotCSDA):
+    def __init__(self, **env_kwargs):
+        super().__init__(**env_kwargs)
+
+    def action_convert(self,
+                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        return jnp.clip(action, -self.max_torque, self.max_torque).squeeze()
 
     def action_space(self) -> spaces.Box:
         return spaces.Box(-self.max_torque, self.max_torque, shape=(1,))

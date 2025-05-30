@@ -1,8 +1,9 @@
 from bifurcagym.envs import base_env, utils
 from bifurcagym.envs.base_env import EnvState
 from bifurcagym.envs.classical_control import (acrobot,
+                                               cartpole,
+                                               n_cartpole,
                                                pendulum,
-                                               pilco_cartpole,
                                                wet_chicken)
 from bifurcagym.envs.continuous_time_chaos import (kuramoto_sivashinsky,
                                                    )

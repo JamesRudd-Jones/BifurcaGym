@@ -15,10 +15,13 @@ import itertools
 
 
 env_names = [
+             # "Acrobot-v0",
+             # "CartPole-v0",
+             # "NCartPole-v0",
+             "Pendubot-v0",
              # "Pendulum-v0",
-             # "PilcoCartPole-v0",
              # "WetChicken-v0",
-              "KS-v0",
+             #  "KS-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
              ]
@@ -55,7 +58,7 @@ class TestEnv:
                     action = env.action_space().sample(_key)
                     key, _key = jrandom.split(key)
                     obs, delta_obs, state, reward, done_jax, _ = env.step(action, state, _key)
-                    print(obs)
+                    # print(obs)
 
         except ValueError as e:
             print(f"Caught expected ValueError for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")

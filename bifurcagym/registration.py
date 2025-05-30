@@ -1,6 +1,7 @@
 from bifurcagym.envs.classical_control import (acrobot,
+                                               cartpole,
+                                               n_cartpole,
                                                pendulum,
-                                               pilco_cartpole,
                                                wet_chicken)
 
 from bifurcagym.envs.continuous_time_chaos import (kuramoto_sivashinsky)
@@ -36,19 +37,35 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State versions.")
 
+    elif env_id == "CartPole-v0":
+        if cont_state and cont_action:
+            env = cartpole.CartPoleCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = cartpole.CartPoleCSCA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State versions.")
+
+    elif env_id == "NCartPole-v0":
+        if cont_state and cont_action:
+            env = n_cartpole.NCartPoleCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = n_cartpole.NCartPoleCSCA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State versions.")
+
+    elif env_id == "Pendubot-v0":
+        if cont_state and cont_action:
+            env = acrobot.PendubotCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = acrobot.PendubotCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State versions.")
+
     elif env_id == "Pendulum-v0":
         if cont_state and cont_action:
             env = pendulum.PendulumCSCA(**env_kwargs)
         elif cont_state and not cont_action:
             env = pendulum.PendulumCSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State versions.")
-
-    elif env_id == "PilcoCartPole-v0":
-        if cont_state and cont_action:
-            env = pilco_cartpole.PilcoCartPoleCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = pilco_cartpole.PilcoCartPoleCSCA(**env_kwargs)
         else:
             raise ValueError("No Discrete State versions.")
 
@@ -132,8 +149,10 @@ def make(env_id: str,
 
 
 registered_envs = ["Acrobot-v0",
+                   "CartPole-v0",
+                   "NCartPole-v0",
+                   "Pendubot-v0",
                    "Pendulum-v0",
-                   "PilcoCartPole-v0",
                    "WetChicken-v0",
                    "KS-v0",
                    "HenonMap-v0",

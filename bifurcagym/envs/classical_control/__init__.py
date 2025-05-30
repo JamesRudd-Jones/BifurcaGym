@@ -1,4 +1,5 @@
 from bifurcagym.envs.classical_control import (acrobot,
+                                               cartpole,
+                                               n_cartpole,
                                                pendulum,
-                                               pilco_cartpole,
                                                wet_chicken)
