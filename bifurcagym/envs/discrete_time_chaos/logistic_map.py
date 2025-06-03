@@ -146,7 +146,6 @@ class LogisticMapDSDA(LogisticMapCSDA):
         raise ValueError(f"No Generative Step for {self.name} Discrete State.")
 
     def _projection(self, s):
-        s = jnp.repeat(s, self.ref_vector.shape[0])
         inter = jnp.abs(self.ref_vector - s)
         return jnp.argmin(inter)
 
