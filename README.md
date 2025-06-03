@@ -58,6 +58,7 @@ BifurcaGym has the following environments currently:
 - More verification of environments to reality, unsure exactly how to do this
 
 Add the following envs:
+- Bernoulli Map/Dyadic Map
 - LorenzXX
 - Mackey Glass
 - Van Der Pol Oscillator
