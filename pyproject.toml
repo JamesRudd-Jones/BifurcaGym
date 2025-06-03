@@ -6,12 +6,6 @@ authors = [
     {name = "james_dell", email = "james.rudd.jones@gmail.com"},
 ]
 dependencies = [
-    "absl-py>=2.1.0",
-    "wandb>=0.17.1",
-    "flashbax>=0.1.2",
-    "lxm3==0.4.2",
-    "gymnax>=0.0.8",
-    "jaxmarl>=0.0.2",
     "pygame>=2.6.1",
     "jax==0.6.0",
 ]
@@ -29,13 +23,13 @@ build-backend = "pdm.backend"
  verify_ssl = true
  type = "find_links"
 
-[tool.pdm.scripts]
+      [tool.pdm.scripts]
 test.cmd = "pytest -n auto --maxprocesses 8 --dist loadfile"
 # test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
 lint.shell = "ruff . && black --check ."
 fmt.shell = "ruff --fix . && black ."
 
-[tool.pdm.dev-dependencies]
+      [tool.pdm.dev-dependencies]
 dev = [
     "lxm3>=0.4.0",
     "ruff>=0.1.11",
