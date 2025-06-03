@@ -56,6 +56,7 @@ BifurcaGym has the following environments currently:
 - Add rendering for all the envs 
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
 - More verification of environments to reality, unsure exactly how to do this
+- Create utils for certain env types, e.g. discrete time chaos may all share a projection func
 
 Add the following envs:
 - Bernoulli Map/Dyadic Map
