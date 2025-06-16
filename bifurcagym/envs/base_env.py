@@ -78,7 +78,7 @@ class BaseEnvironment(abc.ABC):
     def discount(self, state: EnvState) -> chex.Array:
         return jax.lax.select(self.is_done(state), 0.0, 1.0)
 
-    def render_traj(self, state: EnvState):
+    def render_traj(self, state: EnvState, file_path: str):
         raise NotImplementedError
 
     @property

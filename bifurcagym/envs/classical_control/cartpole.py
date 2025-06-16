@@ -145,7 +145,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
     def is_done(self, state: EnvState) -> chex.Array:
         return jnp.array(False)
 
-    def render_traj(self, trajectory_state: EnvState):
+    def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
 
@@ -195,7 +195,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
                                        interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
-        anim.save(f"../animations/{self.name}.gif")
+        anim.save(f"{file_path}/{self.name}.gif")
         plt.close()
 
     @property
