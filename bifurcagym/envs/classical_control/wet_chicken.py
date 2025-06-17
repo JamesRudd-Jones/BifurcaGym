@@ -111,7 +111,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
     def is_done(self, state: EnvState) -> chex.Array:
         return jnp.array(False)  # a continuous task as the environment auto resets as part of the setup
 
-    def render_traj(self, trajectory_state: EnvState):
+    def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
         from matplotlib.colors import LogNorm, Normalize
@@ -197,7 +197,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
                                        interval=600,
                                        blit=True
                                        )
-        anim.save(f"../animations/{self.name}.gif")
+        anim.save(f"{file_path}_{self.name}.gif")
         plt.close()
 
     @property
