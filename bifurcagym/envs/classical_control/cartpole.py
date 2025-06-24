@@ -36,7 +36,10 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         self.mu: float = 0.1  # friction coefficient
 
         self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
-        self.force_mag: float = 10.0
+        self.force_mag: float = 40.0  # 10.0
+
+        self.x_threshold: float = 2.0
+        self.theta_threshold: float = 12 * 2 * jnp.pi / 360
 
         self.horizon: int = 25
         self.dt: float = 0.1
@@ -103,7 +106,10 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        loc = jnp.array([0.0, 0.0, jnp.pi, 0.0])
+        # loc = jnp.array([0.0, 0.0, jnp.pi, 0.0])
+        # TODO the above is for swing up
+        loc = jnp.array([0.0, 0.0, 0.0, 0.0])
+        # TODO this is for no swing up
         scale = jnp.array([0.02, 0.02, 0.02, 0.02])
         init_state = jrandom.normal(key, shape=(4,)) * scale + loc
         state = EnvState(x=init_state[0],
@@ -143,7 +149,18 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         return EnvState(x=obs[0], x_dot=obs[1], theta=self._angle_normalise(obs[2]), theta_dot=obs[3], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
-        return jnp.array(False)
+        done1 = jnp.logical_or(state.x < -self.x_threshold,
+                               state.x > self.x_threshold)
+
+        done2 = jnp.logical_or(state.theta < -self.theta_threshold,
+                               state.theta > self.theta_threshold,
+                               )
+        # TODO the above is for no swingup
+
+        # done2 = False
+        # TODO the above is for swingup
+
+        return jnp.logical_or(done1, done2)
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
@@ -206,8 +223,14 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         return spaces.Discrete(len(self.action_array))
 
     def observation_space(self) -> spaces.Box:
-        high = jnp.array([10.0, 10.0, 3.14159, 25.0])
+        high = jnp.array([self.x_threshold,
+                          self.x_threshold,
+                          3.14159,
+                          25.0])
         return spaces.Box(-high, high, (4,), dtype=jnp.float32)
+
+    def reward_space(self) -> spaces.Box:
+        return spaces.Box(-1, 0, (1,), dtype=jnp.float32)
 
 
 class CartPoleCSCA(CartPoleCSDA):

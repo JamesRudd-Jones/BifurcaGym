@@ -51,7 +51,9 @@ BifurcaGym has the following environments currently:
 
 # TODOs
 
+- Add a metrics wrapper and sort out the current one, had some proper testing, sort out how to correctly render if using metrics wrapper
 - I think there way may be a better way to do the wrappers rather than so much duplicate code
+- Add a vmap wrapper to easily batch envs if needed
 - Should we have state space alongside the observation space?
 - Add rendering for all the envs 
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well

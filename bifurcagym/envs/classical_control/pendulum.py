@@ -30,6 +30,8 @@ class PendulumCSDA(base_env.BaseEnvironment):
         self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
         self.max_torque: float = 2.0
 
+        self.max_steps_in_episode: int = 1000
+
         self.horizon: int = 200
         self.dt: float = 0.05
 
@@ -95,7 +97,9 @@ class PendulumCSDA(base_env.BaseEnvironment):
         return EnvState(theta=obs[0], theta_dot=obs[1], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
-        return jnp.array(False)
+        done = state.time >= self.max_steps_in_episode
+
+        return jnp.array(done)
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
@@ -144,6 +148,9 @@ class PendulumCSDA(base_env.BaseEnvironment):
     def observation_space(self) -> spaces.Box:
         high = jnp.array([jnp.pi, self.max_speed])
         return spaces.Box(-high, high, (2,), dtype=jnp.float32)
+
+    def reward_space(self) -> spaces.Box:
+        return spaces.Box(-1, 0, (1,), dtype=jnp.float32)
 
 
 class PendulumCSCA(PendulumCSDA):

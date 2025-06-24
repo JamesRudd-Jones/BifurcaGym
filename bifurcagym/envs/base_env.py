@@ -90,3 +90,6 @@ class BaseEnvironment(abc.ABC):
 
     def observation_space(self):
         raise NotImplementedError
+
+    def reward_space(self):
+        raise NotImplementedError

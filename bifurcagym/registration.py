@@ -11,6 +11,7 @@ from bifurcagym.envs.discrete_time_chaos import (logistic_map,
                                                  tent_map,
                                                  )
 from bifurcagym.wrappers import (AutoResetWrapper,
+                                 MetricsWrapper,
                                  NormalisedWrapperCSDA,
                                  NormalisedWrapperCSCA,
                                  PeriodicWrapper,
@@ -22,6 +23,7 @@ def make(env_id: str,
          cont_action=False,
          normalised=False,
          autoreset=False,
+         metrics=False,
          **env_kwargs):
 
     if env_id not in registered_envs:
@@ -144,6 +146,9 @@ def make(env_id: str,
     ####################################################################################################################
     if autoreset:
         env = AutoResetWrapper(env)
+
+    if metrics:
+        env = MetricsWrapper(env)
 
     return env
 

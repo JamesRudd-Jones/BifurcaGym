@@ -13,7 +13,7 @@ class AutoResetWrapper(object):
         Automatically resets envs that are done, greatly inspired by the following from Gymnax
         https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/environment.py
 
-        And also from Brax:
+        And from Brax:
         https://github.com/google/brax/blob/main/brax/envs/wrappers/training.py
         """
 
