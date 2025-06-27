@@ -45,8 +45,10 @@ class NormalisedEnvCSDA(object):
         self._wrapped_normalised_env = wrapped_normalised_env
         self.unnorm_action_space = self._wrapped_normalised_env.action_space()
         self.unnorm_observation_space = self._wrapped_normalised_env.observation_space()
+        self.unnorm_reward_space = self._wrapped_normalised_env.reward_space()
 
         self.unnorm_obs_space_size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
+        self.unnorm_rew_space_size = self.unnorm_reward_space.high - self.unnorm_reward_space.low
 
     @property
     def wrapped_normalised_env(self):
@@ -58,11 +60,16 @@ class NormalisedEnvCSDA(object):
              state: EnvState,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wrapped_normalised_env.step(action,
-                                                                                                         state,
-                                                                                                         key)
+        unnorm_obs, unnorm_delta_obs, env_state, rew, done, info = self._wrapped_normalised_env.step(action,
+                                                                                                     state,
+                                                                                                     key)
 
-        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
+        return (self.normalise_obs(unnorm_obs),
+                self.normalise_delta_obs(unnorm_delta_obs),
+                env_state,
+                self.normalise_rew(rew),
+                done,
+                info)
 
     @partial(jax.jit, static_argnums=(0,))
     def generative_step(self,
@@ -100,6 +107,14 @@ class NormalisedEnvCSDA(object):
 
         return norm_obs
 
+    def normalise_rew(self,  rew: chex.Array) -> chex.Array:
+        low = self.unnorm_reward_space.low
+        size = self.unnorm_reward_space_size
+        pos_rew = rew - low
+        norm_rew = (pos_rew / size * 2) - 1
+
+        return norm_rew
+
     def unnormalise_obs(self, obs: chex.Array) -> chex.Array:
         low = self.unnorm_observation_space.low
         size = self.unnorm_obs_space_size
@@ -120,6 +135,13 @@ class NormalisedEnvCSDA(object):
                           high=1,
                           shape=self.unnorm_observation_space.shape,
                           dtype=self.unnorm_observation_space.dtype)
+
+    def reward_space(self) -> spaces.Box:
+        return spaces.Box(-1,
+                          0,
+                          shape=self.unnorm_reward_space.shape,
+                          dtype=self.unnorm_reward_space.dtype)
+    # TODO what do we want the normalisation of reward to be?
 
     def __getattr__(self, attr):
         if attr == "_wrapped_normalised_env":
@@ -147,11 +169,11 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         unnorm_action = self.unnormalise_action(action)
-        unnorm_obs, unnorm_delta_obs, new_env_state, rew, done, info = self._wrapped_normalised_env.step(unnorm_action,
-                                                                                                  state,
-                                                                                                  key)
+        unnorm_obs, unnorm_delta_obs, env_state, rew, done, info = self._wrapped_normalised_env.step(unnorm_action,
+                                                                                                     state,
+                                                                                                     key)
 
-        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), new_env_state, rew, done, info
+        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), env_state, rew, done, info
 
     def reward_function(self,
                         input_action_t: Union[int, float, chex.Array],

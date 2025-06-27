@@ -15,12 +15,14 @@ from bifurcagym.wrappers import (AutoResetWrapper,
                                  NormalisedWrapperCSDA,
                                  NormalisedWrapperCSCA,
                                  PeriodicWrapper,
+                                 VMapWrapper
                                  )
 
 
 def make(env_id: str,
          cont_state=False,
          cont_action=False,
+         vmappable=False,
          normalised=False,
          autoreset=False,
          metrics=False,
@@ -130,7 +132,7 @@ def make(env_id: str,
     if hasattr(env, 'periodic_dim') and env.periodic_dim is not None:
         env = PeriodicWrapper(env)
 
-    # # # Normalises the observation and action space  # TODO can we do reward space as well?
+    # # # Normalises the observation, action, and reward space
     ####################################################################################################################
     if normalised:
         if not cont_state and not cont_action:
@@ -149,6 +151,9 @@ def make(env_id: str,
 
     if metrics:
         env = MetricsWrapper(env)
+
+    if vmappable:
+        env = VMapWrapper(env)
 
     return env
 
