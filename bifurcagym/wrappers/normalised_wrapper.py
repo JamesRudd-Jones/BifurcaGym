@@ -109,7 +109,7 @@ class NormalisedEnvCSDA(object):
 
     def normalise_rew(self,  rew: chex.Array) -> chex.Array:
         low = self.unnorm_reward_space.low
-        size = self.unnorm_reward_space_size
+        size = self.unnorm_rew_space_size
         pos_rew = rew - low
         norm_rew = (pos_rew / size * 2) - 1
 
@@ -138,10 +138,10 @@ class NormalisedEnvCSDA(object):
 
     def reward_space(self) -> spaces.Box:
         return spaces.Box(-1,
-                          0,
+                          1,
                           shape=self.unnorm_reward_space.shape,
                           dtype=self.unnorm_reward_space.dtype)
-    # TODO what do we want the normalisation of reward to be?
+    # TODO what do we want the normalisation of reward to be? Currently to -1 and 1, is that okay?
 
     def __getattr__(self, attr):
         if attr == "_wrapped_normalised_env":

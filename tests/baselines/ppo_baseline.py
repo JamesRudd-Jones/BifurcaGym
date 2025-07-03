@@ -68,17 +68,17 @@ class Transition(NamedTuple):
 
 env_names = [
              # "Acrobot-v0",
-             "CartPole-v0",
+             # "CartPole-v0",
              # "NCartPole-v0",
              # "Pendubot-v0",
-             # "Pendulum-v0",
+             "Pendulum-v0",
              # "WetChicken-v0",
              #  "KS-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
              ]
 cont_state = [True]#, False]
-cont_action = [True]
+cont_action = [False]
 metrics = [True]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action, metrics))
@@ -103,7 +103,7 @@ class TestEnv:
                   "DEBUG": False,
                   }
 
-        total_timesteps = 100000000
+        total_timesteps = 1000000#00
         num_envs = 64
         rollout_length = 128
         num_updates = total_timesteps // rollout_length // num_envs
@@ -281,13 +281,13 @@ class TestEnv:
         runner_state = (trained_state, init_env_state, init_obs, _key)
         runner_state, test_traj_batch = jax.lax.scan(test_step, runner_state, None, 1000)
 
-        # first dim is num updates, second is num steps, third is num env; the last one can be any choice but won't work if num_envs=1
-        if metrics:
-            traj_for_rendering = test_traj_batch.env_state.env_state
-        else:
-            traj_for_rendering = test_traj_batch.env_state
-
-        if cont_action:
-            env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Cont-Action")
-        else:
-            env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Discrete-Action")
+        # # first dim is num updates, second is num steps, third is num env; the last one can be any choice but won't work if num_envs=1
+        # if metrics:
+        #     traj_for_rendering = test_traj_batch.env_state.env_state
+        # else:
+        #     traj_for_rendering = test_traj_batch.env_state
+        #
+        # if cont_action:
+        #     env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Cont-Action")
+        # else:
+        #     env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Discrete-Action")

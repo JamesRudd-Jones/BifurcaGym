@@ -110,6 +110,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         # TODO the above is for swing up
         loc = jnp.array([0.0, 0.0, 0.0, 0.0])
         # TODO this is for no swing up
+
         scale = jnp.array([0.02, 0.02, 0.02, 0.02])
         init_state = jrandom.normal(key, shape=(4,)) * scale + loc
         state = EnvState(x=init_state[0],
