@@ -255,7 +255,7 @@ def update_step(runner_state, unused):
             timesteps = info["timestep"][info["returned_episode"]] * num_envs
             step_dict = {}
             for t in range(len(timesteps)):
-                step_dict["global step"] =timesteps[t]
+                step_dict["global step"] = timesteps[t]
                 step_dict["episodic return"] = return_values[t]
 
             step_dict["policy loss"] = policy_loss.squeeze()
