@@ -50,7 +50,7 @@ BifurcaGym has the following environments currently:
 
 
 # TODOs
-- Cartpole discrete actions does not work and unclear why?
+
 - Check why normalisation seems to affect results negatively
 - Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing 
 - Add a metrics wrapper and sort out the current one, had some proper testing, sort out how to correctly render if using metrics wrapper
