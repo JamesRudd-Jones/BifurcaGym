@@ -36,7 +36,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         self.mu: float = 0.1  # friction coefficient
 
         self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
-        self.force_mag: float = 40.0  # 10.0
+        self.force_mag: float = 10.0
 
         self.x_threshold: float = 2.0
         self.theta_threshold: float = 12 * 2 * jnp.pi / 360
@@ -106,9 +106,9 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        loc = jnp.array([0.0, 0.0, jnp.pi, 0.0])
+        # loc = jnp.array([0.0, 0.0, jnp.pi, 0.0])
         # TODO the above is for swing up
-        # loc = jnp.array([0.0, 0.0, 0.0, 0.0])
+        loc = jnp.array([0.0, 0.0, 0.0, 0.0])
         # TODO this is for no swing up
 
         scale = jnp.array([0.02, 0.02, 0.02, 0.02])
@@ -134,13 +134,12 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         squared_sigma = 0.25 ** 2
         costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
 
-        costs = 100
-
         return -costs
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action] * self.force_mag
+        return self.action_array[action] * self.force_mag / 4
+        # TODO need this 4 divisor to work for discrete actions
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         # TODO if self.use_trig then it is the below
@@ -155,12 +154,12 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         done1 = jnp.logical_or(state.x < -self.x_threshold,
                                state.x > self.x_threshold)
 
-        # done2 = jnp.logical_or(state.theta < -self.theta_threshold,
-        #                        state.theta > self.theta_threshold,
-        #                        )
+        done2 = jnp.logical_or(state.theta < -self.theta_threshold,
+                               state.theta > self.theta_threshold,
+                               )
         # TODO the above is for no swingup
 
-        done2 = False
+        # done2 = False
         # TODO the above is for swingup
 
         return jnp.logical_or(done1, done2)
