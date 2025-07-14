@@ -106,9 +106,9 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        # loc = jnp.array([0.0, 0.0, jnp.pi, 0.0])
+        loc = jnp.array([0.0, 0.0, jnp.pi, 0.0])
         # TODO the above is for swing up
-        loc = jnp.array([0.0, 0.0, 0.0, 0.0])
+        # loc = jnp.array([0.0, 0.0, 0.0, 0.0])
         # TODO this is for no swing up
 
         scale = jnp.array([0.02, 0.02, 0.02, 0.02])
@@ -153,12 +153,12 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         done1 = jnp.logical_or(state.x < -self.x_threshold,
                                state.x > self.x_threshold)
 
-        done2 = jnp.logical_or(state.theta < -self.theta_threshold,
-                               state.theta > self.theta_threshold,
-                               )
+        # done2 = jnp.logical_or(state.theta < -self.theta_threshold,
+        #                        state.theta > self.theta_threshold,
+        #                        )
         # TODO the above is for no swingup
 
-        # done2 = False
+        done2 = False
         # TODO the above is for swingup
 
         return jnp.logical_or(done1, done2)
