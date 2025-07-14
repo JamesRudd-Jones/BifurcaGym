@@ -134,6 +134,8 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         squared_sigma = 0.25 ** 2
         costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
 
+        costs = 100
+
         return -costs
 
     def action_convert(self,
