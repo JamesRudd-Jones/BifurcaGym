@@ -45,7 +45,7 @@ def make(env_id: str,
         if cont_state and cont_action:
             env = cartpole.CartPoleCSCA(**env_kwargs)
         elif cont_state and not cont_action:
-            env = cartpole.CartPoleCSCA(**env_kwargs)
+            env = cartpole.CartPoleCSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State versions.")
 
@@ -53,7 +53,7 @@ def make(env_id: str,
         if cont_state and cont_action:
             env = n_cartpole.NCartPoleCSCA(**env_kwargs)
         elif cont_state and not cont_action:
-            env = n_cartpole.NCartPoleCSCA(**env_kwargs)
+            env = n_cartpole.NCartPoleCSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State versions.")
 
