@@ -125,7 +125,7 @@ class LogisticMapCSDA(LogisticMapCSCA):
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action] * self.max_control
+        return self.action_array[action.squeeze()] * self.max_control
 
     def action_space(self) -> spaces.Discrete:
         return spaces.Discrete(len(self.action_array))

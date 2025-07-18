@@ -146,7 +146,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action] * self.max_torque
+        return self.action_array[action.squeeze()] * self.max_torque
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array((jnp.cos(state.joint_angle_1),

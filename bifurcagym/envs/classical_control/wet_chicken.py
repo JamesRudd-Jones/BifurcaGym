@@ -226,7 +226,7 @@ class WetChickenCSDA(WetChickenCSCA):
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action]
+        return self.action_array[action.squeeze()]
 
     def action_space(self) -> spaces.Discrete:
         return spaces.Discrete(len(self.action_array))

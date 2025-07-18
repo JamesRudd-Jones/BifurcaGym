@@ -135,7 +135,8 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action] * self.force_mag
+        return self.action_array[action.squeeze()] * self.force_mag / 4
+        # TODO need this 4 divisor to work for discrete actions
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:  # TODO check this
         # TODO if self.use_trig then it is the below

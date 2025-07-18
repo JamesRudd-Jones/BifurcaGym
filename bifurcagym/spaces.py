@@ -20,7 +20,7 @@ class Discrete(Space):
         self.dtype = jnp.int_
 
     def sample(self, key: chex.PRNGKey) -> chex.Array:
-        return jrandom.randint(key, shape=(), minval=0, maxval=self.n).astype(self.dtype)
+        return jrandom.randint(key, shape=(1,), minval=0, maxval=self.n).astype(self.dtype)
 
 
 class Box(Space):
