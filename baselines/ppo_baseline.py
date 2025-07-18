@@ -299,15 +299,15 @@ for t in range(len(timesteps)):
     print(f"global step={timesteps[t]}, episodic return={return_values[t]}")
 # print(f"global step={timesteps[-1]}, episodic return={return_values[-1]}")
 
-# # first dim is num updates, second is num steps, third is num env; the last one can be any choice but won't work if num_envs=1
-# if metrics:
-#     traj_for_rendering = test_traj_batch.env_state.env_state
-# else:
-#     traj_for_rendering = test_traj_batch.env_state
-#
-# if cont_action:
-#     # env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Cont-Action")
-#     env.render_traj(traj_for_rendering, file_path=f"./animations/baselines/Cont-Action")
-# else:
-#     # env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Discrete-Action")
-#     env.render_traj(traj_for_rendering, file_path=f"./animations/baselines/Discrete-Action")
+# first dim is num updates, second is num steps, third is num env; the last one can be any choice but won't work if num_envs=1
+if metrics:
+    traj_for_rendering = test_traj_batch.env_state.env_state
+else:
+    traj_for_rendering = test_traj_batch.env_state
+
+if cont_action:
+    # env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Cont-Action")
+    env.render_traj(traj_for_rendering, file_path=f"./animations/baselines/Cont-Action")
+else:
+    # env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Discrete-Action")
+    env.render_traj(traj_for_rendering, file_path=f"./animations/baselines/Discrete-Action")

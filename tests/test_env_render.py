@@ -18,8 +18,8 @@ env_names = [
              # "Acrobot-v0",
              # "CartPole-v0",
              # "NCartPole-v0",
-             "Pendubot-v0",
-             # "Pendulum-v0",
+             # "Pendubot-v0",
+             "Pendulum-v0",
              # "WetChicken-v0",
              #  "KS-v0",
              # "LogisticMap-v0",
@@ -38,7 +38,7 @@ class TestEnv:
         """Set up common test resources."""
         self.num_steps = 200#0
         self.num_episodes = 100
-        self.key = jrandom.PRNGKey(42)
+        self.key = jrandom.key(42)
         self.error = 1e-4
 
 
