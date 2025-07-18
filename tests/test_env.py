@@ -15,15 +15,15 @@ import itertools
 
 
 env_names = [
-             # "Acrobot-v0",
-             # "CartPole-v0",
-             # "NCartPole-v0",
-             # "Pendubot-v0",
+             "Acrobot-v0",
+             "CartPole-v0",
+             "NCartPole-v0",
+             "Pendubot-v0",
              "Pendulum-v0",
-             # "WetChicken-v0",
-             #  "KS-v0",
-             # "LogisticMap-v0",
-             # "TentMap-v0",
+             "WetChicken-v0",
+              "KS-v0",
+             "LogisticMap-v0",
+             "TentMap-v0",
              ]
 cont_state = [True, False]
 cont_action = [True, False]
