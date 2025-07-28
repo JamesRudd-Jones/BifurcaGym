@@ -52,7 +52,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         self.fluid_dt: float = 0.2
         self.fluid_viscosity: float = 1e-6
         self.fluid_iterations: int = 20  # Number of iterations for the linear solver
-        self.fluid_force: float = 0.5  # 1.0  # 5.0  # Strength of the external force driving the fluid
+        self.fluid_force: float = 5.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
         self.fluid_damping: float = 0.999  # Damping factor to prevent velocity explosion
         self.current_scaling_factor: float = 0.2  # Scales the effect of the current on the boat
 
@@ -93,23 +93,32 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         # Example: A circular force field
         x_coords, y_coords = jnp.meshgrid(jnp.arange(self.fluid_grid_size * self.width),
                                           jnp.arange(self.fluid_grid_size * self.length))
-        center_x, center_y = self.fluid_grid_size * self.width / 2, self.fluid_grid_size * self.length / 2
-        dx, dy = x_coords - center_x, y_coords - center_y
+        centre_x = (self.fluid_grid_size * self.width) / 2
+        centre_y = (self.fluid_grid_size * self.length) / 2
+        dx, dy = x_coords - centre_x, y_coords - centre_y
         # force_u = -dy * self.fluid_force * 1e-4
         force_u = dy * self.fluid_force * 1e-4
         force_v = dx * self.fluid_force * 1e-4
 
-        u += self.fluid_dt * force_u
-        v += self.fluid_dt * force_v
+        u = self.fluid_dt * force_u
+        v = self.fluid_dt * force_v
 
         # Standard fluid solver steps (Stable Fluids method)
-        u = self._diffuse(u)
-        v = self._diffuse(v)
-        u, v = self._project(u, v)
+        # u = self._diffuse(u)
+        # v = self._diffuse(v)
+        # u, v = self._project(u, v)
+        #
+        # u = self._advect(u, u, v)
+        # v = self._advect(v, u, v)
+        # u, v = self._project(u, v)
+        # TODO above is what is said
 
         u = self._advect(u, u, v)
         v = self._advect(v, u, v)
+        u = self._diffuse(u)
+        v = self._diffuse(v)
         u, v = self._project(u, v)
+        # TODO I think this more closely matches the paper?
 
         u *= self.fluid_damping  # Bit of a dodgy fix for now to allow for some damping to non explicitly modelled friction forces
         v *= self.fluid_damping
@@ -141,11 +150,12 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
                           ))
 
     def chaotic_current_func(self, state: EnvState, key: chex.PRNGKey) -> chex.Array:
-        grid_x = state.x / self.width * self.fluid_grid_size
-        grid_y = state.y / self.length * self.fluid_grid_size
+        grid_x = state.x / (self.width * self.fluid_grid_size)
+        grid_y = state.y / (self.length * self.fluid_grid_size)
 
         # Create coordinate array for interpolation
         coords = jnp.array([[grid_y], [grid_x]])
+        # TODO should this be the other way around?
 
         # Bilinearly interpolate the velocity from the fluid grid
         u_interpolated = jsp.ndimage.map_coordinates(state.fluid_u, coords, order=1, mode='wrap')[0]
