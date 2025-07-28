@@ -10,6 +10,8 @@ from bifurcagym.envs.discrete_time_chaos import (logistic_map,
                                                  henon_map,
                                                  tent_map,
                                                  )
+from bifurcagym.envs.non_stationary import (boat_in_current,
+                                            )
 from bifurcagym.wrappers import (AutoResetWrapper,
                                  MetricsWrapper,
                                  NormalisedWrapperCSDA,
@@ -124,6 +126,13 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State Continuous Action version.")
 
+    # # # Non-Stationary
+    ####################################################################################################################
+    elif env_id == "BoatInCurrent-v0":
+        if cont_state and cont_action:
+            env = boat_in_current.BoatInCurrentCSCA(**env_kwargs)
+        # TODO add in for the others as well
+
     else:
         raise ValueError("Environment ID is not registered.")
 
@@ -168,4 +177,5 @@ registered_envs = ["Acrobot-v0",
                    "HenonMap-v0",
                    "LogisticMap-v0",
                    "TentMap-v0",
+                   "BoatInCurrent-v0"
                    ]

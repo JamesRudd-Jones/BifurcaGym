@@ -69,7 +69,7 @@ class BaseEnvironment(abc.ABC):
     def get_obs(self, state, key: chex.PRNGKey = None) -> chex.Array:
         raise NotImplementedError
 
-    def get_state(self, obs: chex.Array) -> EnvState:
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         raise NotImplementedError
 
     def is_done(self, state: EnvState) -> chex.Array:

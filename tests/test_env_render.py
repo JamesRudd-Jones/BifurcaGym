@@ -19,11 +19,12 @@ env_names = [
              # "CartPole-v0",
              # "NCartPole-v0",
              # "Pendubot-v0",
-             "Pendulum-v0",
+             # "Pendulum-v0",
              # "WetChicken-v0",
              #  "KS-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
+             "BoatInCurrent-v0",
              ]
 cont_state = [True]#, False]
 cont_action = [True]#, False]
@@ -46,7 +47,7 @@ class TestEnv:
         """Test env doesn't have any errors"""
         try:
             key, _key = jrandom.split(self.key)
-            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action)
+            env = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action, autoreset=True)
 
             key, _key = jrandom.split(key)
             obs, env_state = env.reset(_key)
