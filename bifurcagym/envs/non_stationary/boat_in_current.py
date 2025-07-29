@@ -52,9 +52,8 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         self.fluid_dt: float = 0.2
         self.fluid_viscosity: float = 1e-6
         self.fluid_iterations: int = 20  # Number of iterations for the linear solver
-        self.fluid_force: float = 5.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
-        self.fluid_damping: float = 0.999  # Damping factor to prevent velocity explosion
-        self.current_scaling_factor: float = 0.2  # Scales the effect of the current on the boat
+        self.fluid_force: float = 40.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
+        self.current_scaling_factor: float = 1.2  # Scales the effect of the current on the boat
 
         self.is_homoskedastic: bool = False
         self.is_heteroskedastic: bool = False
@@ -87,71 +86,11 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action)
 
-        u = state.fluid_u
-        v = state.fluid_v
+        u, v = self.current_func(state)
+        u, v = self.noise_func(state, u, v, key)
 
-        # Example: A circular force field
-        x_coords, y_coords = jnp.meshgrid(jnp.arange(self.fluid_grid_size * self.width),
-                                          jnp.arange(self.fluid_grid_size * self.length))
-        centre_x = (self.fluid_grid_size * self.width) / 2
-        centre_y = (self.fluid_grid_size * self.length) / 2
-        dx, dy = x_coords - centre_x, y_coords - centre_y
-        # force_u = -dy * self.fluid_force * 1e-4
-        force_u = dy * self.fluid_force * 1e-4
-        force_v = dx * self.fluid_force * 1e-4
-
-        u = self.fluid_dt * force_u
-        v = self.fluid_dt * force_v
-
-        # Standard fluid solver steps (Stable Fluids method)
-        # u = self._diffuse(u)
-        # v = self._diffuse(v)
-        # u, v = self._project(u, v)
-        #
-        # u = self._advect(u, u, v)
-        # v = self._advect(v, u, v)
-        # u, v = self._project(u, v)
-        # TODO above is what is said
-
-        u = self._advect(u, u, v)
-        v = self._advect(v, u, v)
-        u = self._diffuse(u)
-        v = self._diffuse(v)
-        u, v = self._project(u, v)
-        # TODO I think this more closely matches the paper?
-
-        u *= self.fluid_damping  # Bit of a dodgy fix for now to allow for some damping to non explicitly modelled friction forces
-        v *= self.fluid_damping
-        # TODO sort the updates out here
-
-        current = self.current_func(state, key)
-        current = self.noise_func(state, current, key)
-
-        x_hat = state.x + action[0] + current[0]
-        y_hat = state.y + action[1] + current[1]
-
-        new_state = EnvState(x=x_hat, y=y_hat, fluid_u=u, fluid_v=v, time=state.time + 1, key=key)
-
-        reward = self.reward_function(input_action, state, new_state, key)
-
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
-                reward,  # TODO check reward is the correct way around
-                self.is_done(new_state),
-                {})
-
-    def stationary_current_func(self, state: EnvState, key: chex.PRNGKey) -> chex.Array:
-        return jnp.array((-self.max_current, self.max_current))
-
-    def nonstationary_current_func(self, state: EnvState, key: chex.PRNGKey) -> chex.Array:
-        return jnp.array((-self.max_current + 0.1 * jnp.sin(state.time),
-                          self.max_current,
-                          ))
-
-    def chaotic_current_func(self, state: EnvState, key: chex.PRNGKey) -> chex.Array:
-        grid_x = state.x / (self.width * self.fluid_grid_size)
-        grid_y = state.y / (self.length * self.fluid_grid_size)
+        grid_x = state.x / self.width * self.fluid_grid_size
+        grid_y = state.y / self.length * self.fluid_grid_size
 
         # Create coordinate array for interpolation
         coords = jnp.array([[grid_y], [grid_x]])
@@ -164,18 +103,73 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         # The solver velocity is in units of (grid_cells / fluid_dt).
         # We return this as a displacement vector for the agent's timestep.
         # A scaling factor is used to make the current's effect noticeable.
-        return jnp.array([u_interpolated, v_interpolated]) * self.current_scaling_factor
+        x_hat = state.x + action[0] + u_interpolated * self.current_scaling_factor
+        y_hat = state.y + action[1] + v_interpolated* self.current_scaling_factor
 
-    def no_noise(self, state: EnvState, current: chex.Array, key: chex.PRNGKey) -> chex.Array:
-        return current
+        new_state = EnvState(x=x_hat, y=y_hat, fluid_u=u, fluid_v=v, time=state.time + 1, key=key)
 
-    def homoskedastic_noise(self, state: EnvState, current: chex.Array, key: chex.PRNGKey) -> chex.Array:
+        reward = self.reward_function(input_action, state, new_state, key)
+
+        return (jax.lax.stop_gradient(self.get_obs(new_state)),
+                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
+                jax.lax.stop_gradient(new_state),
+                reward,  # TODO check reward is the correct way around
+                self.is_done(new_state),
+                {})
+
+    def _get_current_at_point(self, x, y, u_grid, v_grid):
+        grid_x = x / self.width * self.fluid_grid_size
+        grid_y = y / self.length * self.fluid_grid_size
+        coords = jnp.array([[grid_y], [grid_x]])
+        u_interp = jsp.ndimage.map_coordinates(u_grid, coords, order=1, mode='wrap')[0]
+        v_interp = jsp.ndimage.map_coordinates(v_grid, coords, order=1, mode='wrap')[0]
+        return jnp.array([u_interp, v_interp])
+
+    def stationary_current_func(self, state: EnvState) -> chex.Array:
+        return jnp.array((-self.max_current, self.max_current))
+
+    def nonstationary_current_func(self, state: EnvState) -> chex.Array:
+        return jnp.array((-self.max_current + 0.1 * jnp.sin(state.time),
+                          self.max_current,
+                          ))
+
+    def chaotic_current_func(self, state: EnvState) -> Tuple[chex.Array, chex.Array]:
+        u = state.fluid_u
+        v = state.fluid_v
+
+        # Example: A circular force field
+        x_coords, y_coords = jnp.meshgrid(jnp.arange(self.fluid_grid_size * self.width),
+                                          jnp.arange(self.fluid_grid_size * self.length))
+        centre_x = (self.fluid_grid_size * self.width) / 2
+        centre_y = (self.fluid_grid_size * self.length) / 2
+        dx, dy = x_coords - centre_x, y_coords - centre_y
+        force_u = -dy * self.fluid_force * 1e-4  # creates a vortex
+        # force_u = dy * self.fluid_force * 1e-4
+        force_v = dx * self.fluid_force * 1e-4
+
+        u += self.fluid_dt * force_u
+        v += self.fluid_dt * force_v
+
+        # Standard fluid solver steps (Stable Fluids method)
+        u = self._diffuse(u)
+        v = self._diffuse(v)
+
+        u = self._advect(u, u, v)
+        v = self._advect(v, u, v)
+        u, v = self._project(u, v)
+
+        return u, v
+
+    def no_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
+        return u, v
+
+    def homoskedastic_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
         x_key, y_key = jrandom.split(key)
         return jnp.array((current[0] + jrandom.normal(x_key) * self.current_noise_scale,
                           current[1] + jrandom.normal(y_key) * self.current_noise_scale,
                           ))
 
-    def heteroskedastic_noise(self, state: EnvState, current: chex.Array, key: chex.PRNGKey) -> chex.Array:
+    def heteroskedastic_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
         x_key, y_key = jrandom.split(key)
         state_depend_x = (state.x / self.width) + 0.5
         state_depend_y = (state.y / self.length)
@@ -200,7 +194,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         return jax.lax.fori_loop(0, self.fluid_iterations, body_fun, x)
 
     def _diffuse(self, field: chex.Array) -> chex.Array:
-        """Applies fluid diffusion (viscosity)."""
+        """Applies fluid diffusion (viscosity)"""
         a = self.fluid_dt * self.fluid_viscosity * (self.fluid_grid_size * self.width) * (self.fluid_grid_size * self.length)
         return self._linear_solve(field, field, a, 1 + 4 * a)
 
@@ -210,8 +204,8 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
                                           jnp.arange(self.length * self.fluid_grid_size))
 
         # Trace back in time to find the source of the fluid
-        back_x = x_coords - (self.fluid_dt * u * self.width * self.fluid_grid_size)
-        back_y = y_coords - (self.fluid_dt * v * self.length * self.fluid_grid_size)
+        back_x = x_coords - (self.fluid_dt * u * (self.width * self.fluid_grid_size))
+        back_y = y_coords - (self.fluid_dt * v * (self.length * self.fluid_grid_size))
 
         coords = jnp.stack([back_y, back_x], axis=0)
 
@@ -295,19 +289,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         y_coarse = jnp.linspace(0, self.length, coarse_res)
         X_coarse, Y_coarse = jnp.meshgrid(x_coarse, y_coarse)
 
-        # def get_current_at_point(x, y, time, key):
-        #     state = EnvState(x=x, y=y, time=time, key=key)
-        #     return self.current_func(state, key)
-
-        def get_current_at_point(x, y, u_grid, v_grid):
-            grid_x = x / self.width * self.fluid_grid_size
-            grid_y = y / self.length * self.fluid_grid_size
-            coords = jnp.array([[grid_y], [grid_x]])
-            u_interp = jsp.ndimage.map_coordinates(u_grid, coords, order=1, mode='wrap')[0]
-            v_interp = jsp.ndimage.map_coordinates(v_grid, coords, order=1, mode='wrap')[0]
-            return jnp.array([u_interp, v_interp])
-
-        vmap_current_spatial = jax.vmap(jax.vmap(get_current_at_point, in_axes=(0, None, None, None)), in_axes=(None, 0, None, None))
+        vmap_current_spatial = jax.vmap(jax.vmap(self._get_current_at_point, in_axes=(0, None, None, None)), in_axes=(None, 0, None, None))
 
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.set_title(self.name)
