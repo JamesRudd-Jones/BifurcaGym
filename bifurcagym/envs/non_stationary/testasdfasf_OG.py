@@ -1349,3 +1349,329 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         high = jnp.array([self.width, self.length])
         return spaces.Box(low, high, (2,))
 
+
+import jax
+import jax.numpy as jnp
+import jax.random as jrandom
+import jax.scipy.ndimage
+from bifurcagym.envs import base_env
+from bifurcagym import spaces
+from flax import struct
+from typing import Any, Dict, Tuple, Union
+import chex
+from functools import partial
+
+
+@struct.dataclass
+class EnvState(base_env.EnvState):
+    """
+    Represents the state of the environment.
+
+    Attributes:
+        x (chex.Array): The x-coordinate of the boat.
+        y (chex.Array): The y-coordinate of the boat.
+        time (int): The current timestep.
+        key (chex.PRNGKey): JAX random key.
+        fluid_u (chex.Array): The u-component (x-velocity) of the fluid grid in world units/sec.
+        fluid_v (chex.Array): The v-component (y-velocity) of the fluid grid in world units/sec.
+    """
+    x: chex.Array
+    y: chex.Array
+    time: int
+    key: chex.PRNGKey
+    fluid_u: chex.Array
+    fluid_v: chex.Array
+
+
+class BoatInCurrentCSCA(base_env.BaseEnvironment):
+    """
+    A 2D environment simulating a boat in a current.
+    The fluid solver uses a grid of SQUARE cells, which can form a RECTANGULAR overall grid.
+    """
+
+    def __init__(self, **env_kwargs):
+        super().__init__(**env_kwargs)
+
+        # Environment dimensions
+        self.length: float = 20.0  # Example of a rectangular world
+        self.width: float = 10.0
+
+        # Goal state
+        self.goal_state = jnp.array((self.width, self.length))
+
+        # Action and horizon limits
+        self.max_action: float = 1.0
+        self.horizon: int = 200
+        self.agent_dt: float = 1.0  # Timestep for a single agent action
+
+        # --- Fluid Dynamics Parameters for Chaotic Current ---
+        self.is_chaotic: bool = True
+        self.cell_size: float = 0.5  # The side length of each SQUARE grid cell in world units.
+        self.fluid_dt: float = 0.1  # Timestep for the fluid simulation
+        self.fluid_viscosity: float = 1e-6
+        self.fluid_iterations: int = 20
+        self.fluid_force: float = 5.0
+        self.fluid_damping: float = 0.999
+
+        # --- Rectangular Grid Setup from Square Cells ---
+        self.fluid_grid_width = int(self.width / self.cell_size)
+        self.fluid_grid_height = int(self.length / self.cell_size)
+
+        # For clarity, dx and dy are the same, representing the size of our square cells.
+        self.dx = self.cell_size
+        self.dy = self.cell_size
+
+    # --------------------------------------------------------------------------------
+    # JIT-compiled static methods for the fluid solver (for square cells on a rectangular grid)
+    # --------------------------------------------------------------------------------
+
+    @staticmethod
+    @partial(jax.jit, static_argnums=(2,))
+    def _linear_solve(x: chex.Array, b: chex.Array, a: float, c: float, num_iterations: int) -> chex.Array:
+        """
+        Solves a linear system using Jacobi iteration. Simplified for square cells (isotropic).
+        """
+
+        def body_fun(_, val):
+            x_prev = val
+            neighbors = (jnp.roll(x_prev, 1, axis=0) + jnp.roll(x_prev, -1, axis=0) +
+                         jnp.roll(x_prev, 1, axis=1) + jnp.roll(x_prev, -1, axis=1))
+            x_new = (b + a * neighbors) / c
+            return x_new
+
+        return jax.lax.fori_loop(0, num_iterations, body_fun, x)
+
+    @staticmethod
+    @partial(jax.jit, static_argnums=(2, 3, 4))
+    def _diffuse(field, viscosity, dt, cell_size, num_iterations):
+        """Applies fluid diffusion. Simplified for square cells."""
+        a = dt * viscosity / (cell_size * cell_size)
+        return BoatInCurrentCSCA._linear_solve(field, field, a, 1 + 4 * a, num_iterations)
+
+    @staticmethod
+    @partial(jax.jit, static_argnums=(3, 4, 5))
+    def _advect(field, u, v, dt, cell_size, grid_shape):
+        """Moves a quantity 'field' through the velocity field (u, v) in world units."""
+        grid_height, grid_width = grid_shape
+        y_coords_grid, x_coords_grid = jnp.mgrid[0:grid_height, 0:grid_width]
+
+        # Convert grid coordinates to world coordinates
+        x_coords_world = x_coords_grid * cell_size
+        y_coords_world = y_coords_grid * cell_size
+
+        # Trace back in time in world space
+        back_x_world = x_coords_world - dt * u
+        back_y_world = y_coords_world - dt * v
+
+        # Convert back-traced world coordinates to grid coordinates for sampling
+        back_x_grid = back_x_world / cell_size
+        back_y_grid = back_y_world / cell_size
+
+        coords = jnp.stack([back_y_grid, back_x_grid], axis=0)
+        return jax.scipy.ndimage.map_coordinates(field, coords, order=1, mode='wrap')
+
+    @staticmethod
+    @partial(jax.jit, static_argnums=(2, 3))
+    def _project(u, v, cell_size, num_iterations):
+        """Enforces fluid incompressibility. Simplified for square cells."""
+        # Discretized divergence: du/dx + dv/dy
+        div = -0.5 / cell_size * ((jnp.roll(u, -1, axis=1) - jnp.roll(u, 1, axis=1)) +
+                                  (jnp.roll(v, -1, axis=0) - jnp.roll(v, 1, axis=0)))
+
+        # Solve Poisson equation: ∇²p = div. For square cells, this simplifies.
+        p = jnp.zeros_like(div)
+        p = BoatInCurrentCSCA._linear_solve(p, div, 1.0, 4.0, num_iterations)
+
+        # Subtract pressure gradient: V' = V - ∇p
+        u_new = u - 0.5 / cell_size * (jnp.roll(p, -1, axis=1) - jnp.roll(p, 1, axis=1))
+        v_new = v - 0.5 / cell_size * (jnp.roll(p, -1, axis=0) - jnp.roll(p, 1, axis=0))
+
+        return u_new, v_new
+
+    # --------------------------------------------------------------------------------
+    # Core Environment Methods
+    # --------------------------------------------------------------------------------
+
+    def step_env(self, input_action, state, key):
+        action = self.action_convert(input_action)
+        u, v = state.fluid_u, state.fluid_v
+
+        if self.is_chaotic:
+            # --- Step 1: Add Force (as an acceleration) ---
+            y_coords, x_coords = jnp.mgrid[0:self.fluid_grid_height, 0:self.fluid_grid_width]
+            center_y, center_x = self.fluid_grid_height / 2, self.fluid_grid_width / 2
+            dx_grid, dy_grid = x_coords - center_x, y_coords - center_y
+
+            force_u = -dy_grid * self.fluid_force * 1e-2
+            force_v = dx_grid * self.fluid_force * 1e-2
+
+            u += self.fluid_dt * force_u
+            v += self.fluid_dt * force_v
+
+            # --- FLUID SOLVER SEQUENCE for dt ---
+            u = self._diffuse(u, self.fluid_viscosity, self.fluid_dt, self.cell_size, self.fluid_iterations)
+            v = self._diffuse(v, self.fluid_viscosity, self.fluid_dt, self.cell_size, self.fluid_iterations)
+
+            grid_shape = (self.fluid_grid_height, self.fluid_grid_width)
+            u = self._advect(u, u, v, self.fluid_dt, self.cell_size, grid_shape)
+            v = self._advect(v, u, v, self.fluid_dt, self.cell_size, grid_shape)
+
+            u, v = self._project(u, v, self.cell_size, self.fluid_iterations)
+
+            u *= self.fluid_damping
+            v *= self.fluid_damping
+
+        current = self.current_func(state._replace(fluid_u=u, fluid_v=v), key)
+        x_hat = state.x + action[0] + current[0]
+        y_hat = state.y + action[1] + current[1]
+
+        new_state = state._replace(x=x_hat, y=y_hat, time=state.time + 1, key=key, fluid_u=u, fluid_v=v)
+        reward = self.reward_function(input_action, state, new_state, key)
+
+        return (self.get_obs(new_state), self.get_obs(new_state) - self.get_obs(state),
+                new_state, reward, self.is_done(new_state), {})
+
+    def current_func(self, state: EnvState, key: chex.PRNGKey) -> chex.Array:
+        """Calculates the current displacement at the boat's position for one agent timestep."""
+        if not self.is_chaotic:
+            return jnp.array([-0.1, 0.1]) * self.agent_dt
+
+        # Convert boat's world coordinates to fluid grid coordinates for sampling
+        grid_x = state.x / self.cell_size
+        grid_y = state.y / self.cell_size
+        coords = jnp.array([[grid_y], [grid_x]])
+
+        # Interpolate the velocity (world units/sec) from the fluid grid
+        u_interpolated = jax.scipy.ndimage.map_coordinates(state.fluid_u, coords, order=1, mode='wrap')[0]
+        v_interpolated = jax.scipy.ndimage.map_coordinates(state.fluid_v, coords, order=1, mode='wrap')[0]
+
+        # Return displacement = velocity * agent timestep
+        return jnp.array([u_interpolated, v_interpolated]) * self.agent_dt
+
+    def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
+        key, u_key, v_key = jrandom.split(key, 3)
+        grid_shape = (self.fluid_grid_height, self.fluid_grid_width)
+
+        if self.is_chaotic:
+            u_init = jrandom.normal(u_key, grid_shape) * 0.1
+            v_init = jrandom.normal(v_key, grid_shape) * 0.1
+            u_init, v_init = self._project(u_init, v_init, self.cell_size, self.fluid_iterations)
+        else:
+            u_init = jnp.zeros(grid_shape)
+            v_init = jnp.zeros(grid_shape)
+
+        state = EnvState(x=jnp.zeros(()), y=jnp.zeros(()), time=0, key=key, fluid_u=u_init, fluid_v=v_init)
+        return self.get_obs(state), state
+
+    def reward_function(self, input_action_t, state_t, state_tp1, key=None):
+        dist_to_goal = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y)) - self.goal_state)
+        return -dist_to_goal
+
+    def action_convert(self, action):
+        return jnp.clip(action, -self.max_action, self.max_action)
+
+    def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
+        return jnp.array([state.x, state.y])
+
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
+        dummy_fluid_shape = (self.fluid_grid_height, self.fluid_grid_width)
+        dummy_fluid = jnp.zeros(dummy_fluid_shape)
+        return EnvState(x=obs[0], y=obs[1], time=-1, key=key, fluid_u=dummy_fluid, fluid_v=dummy_fluid)
+
+    def is_done(self, state: EnvState) -> chex.Array:
+        x_bounds = (state.x >= self.width) | (state.x < 0)
+        y_bounds = (state.y >= self.length) | (state.y < 0)
+        goal_reached = jnp.linalg.norm(jnp.array((state.x, state.y)) - self.goal_state) < 0.5
+        timeout = state.time >= self.horizon
+        return x_bounds | y_bounds | goal_reached | timeout
+
+    def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations/"):
+        import matplotlib.pyplot as plt
+        import matplotlib.animation as animation
+
+        # Adjust plot size to match world aspect ratio
+        fig_width = 8
+        fig_height = fig_width * (self.length / self.width)
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+        ax.set_title(self.name)
+        ax.set_xlim(0, self.width)
+        ax.set_ylim(0, self.length)
+        ax.set_xlabel("X Position")
+        ax.set_ylabel("Y Position")
+        ax.set_aspect('equal', adjustable='box')
+        ax.plot(self.goal_state[0], self.goal_state[1], marker='*', markersize=15, color="gold", label="Goal State",
+                zorder=4)
+
+        # Setup grids for visualization
+        fine_res_x = self.fluid_grid_width * 2
+        fine_res_y = self.fluid_grid_height * 2
+        x_fine = jnp.linspace(0, self.width, fine_res_x)
+        y_fine = jnp.linspace(0, self.length, fine_res_y)
+        X_fine, Y_fine = jnp.meshgrid(x_fine, y_fine)
+
+        coarse_res_x = 20
+        coarse_res_y = int(coarse_res_x * (self.length / self.width))
+        x_coarse = jnp.linspace(0, self.width, coarse_res_x)
+        y_coarse = jnp.linspace(0, self.length, coarse_res_y)
+        X_coarse, Y_coarse = jnp.meshgrid(x_coarse, y_coarse)
+
+        def get_velocity_at_point(x, y, u_grid, v_grid):
+            grid_x = x / self.cell_size
+            grid_y = y / self.cell_size
+            coords = jnp.array([[grid_y], [grid_x]])
+            u_interp = jax.scipy.ndimage.map_coordinates(u_grid, coords, order=1, mode='wrap')[0]
+            v_interp = jax.scipy.ndimage.map_coordinates(v_grid, coords, order=1, mode='wrap')[0]
+            return jnp.array([u_interp, v_interp])
+
+        vmap_current_spatial = jax.vmap(jax.vmap(get_velocity_at_point, in_axes=(0, None, None, None)),
+                                        in_axes=(None, 0, None, None))
+
+        initial_u, initial_v = trajectory_state.fluid_u[0], trajectory_state.fluid_v[0]
+        initial_vel_fine = vmap_current_spatial(x_fine, y_fine, initial_u, initial_v)
+        initial_mag_fine = jnp.linalg.norm(initial_vel_fine, axis=-1)
+        initial_vel_coarse = vmap_current_spatial(x_coarse, y_coarse, initial_u, initial_v)
+
+        line, = ax.plot([], [], 'r-', lw=2, label='Agent Trail', zorder=3)
+        dot, = ax.plot([], [], color="magenta", marker="o", markersize=10, label='Current State', zorder=5)
+        pcm = ax.pcolormesh(X_fine, Y_fine, initial_mag_fine, cmap='viridis', shading='auto', zorder=1, alpha=0.7,
+                            vmin=0, vmax=1.0)
+        arrow = ax.quiver(X_coarse, Y_coarse, initial_vel_coarse[:, :, 0], initial_vel_coarse[:, :, 1], color='white',
+                          angles='xy', scale_units='xy', scale=5.0, width=0.004, zorder=2)
+
+        ax.legend(loc='upper left')
+        fig.colorbar(pcm, ax=ax, shrink=0.8, label='Current Magnitude (m/s)')
+        agent_path_x, agent_path_y = [], []
+
+        def update(frame):
+            if frame == 0: agent_path_x.clear(); agent_path_y.clear()
+            agent_path_x.append(trajectory_state.x[frame]);
+            agent_path_y.append(trajectory_state.y[frame])
+            line.set_data(agent_path_x, agent_path_y)
+            dot.set_data([trajectory_state.x[frame]], [trajectory_state.y[frame]])
+
+            u_grid, v_grid = trajectory_state.fluid_u[frame], trajectory_state.fluid_v[frame]
+            vel_fine = vmap_current_spatial(x_fine, y_fine, u_grid, v_grid)
+            magnitude_fine = jnp.linalg.norm(vel_fine, axis=-1)
+            vel_coarse = vmap_current_spatial(x_coarse, y_coarse, u_grid, v_grid)
+
+            pcm.set_array(magnitude_fine.ravel())
+            arrow.set_UVC(vel_coarse[:, :, 0], vel_coarse[:, :, 1])
+            return line, dot, pcm, arrow
+
+        anim = animation.FuncAnimation(fig, update, frames=len(trajectory_state.time), interval=100, blit=True)
+        anim.save(f"{file_path}_{self.name}.gif", writer='imagemagick')
+        plt.close()
+
+    @property
+    def name(self) -> str:
+        return f"BoatInCurrent-{self.width}x{self.length}-Chaotic"
+
+    def action_space(self) -> spaces.Box:
+        return spaces.Box(-self.max_action, self.max_action, shape=(2,))
+
+    def observation_space(self) -> spaces.Box:
+        low = jnp.array([0, 0])
+        high = jnp.array([self.width, self.length])
+        return spaces.Box(low, high, (2,))
+

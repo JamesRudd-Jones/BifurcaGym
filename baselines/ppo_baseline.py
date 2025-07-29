@@ -72,7 +72,7 @@ class Transition(NamedTuple):
 
 env_names = [
              # "Acrobot-v0",
-             "CartPole-v0",
+             # "CartPole-v0",
              # "NCartPole-v0",
              # "Pendubot-v0",
              # "Pendulum-v0",
@@ -80,6 +80,7 @@ env_names = [
              #  "KS-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
+             "BoatInCurrent-v0",
              ]
 
 key = jrandom.key(42)
@@ -105,7 +106,7 @@ num_updates = total_timesteps // rollout_length // num_envs
 config["MINIBATCH_SIZE"] = (num_envs * rollout_length // config["NUM_MINIBATCHES"])
 
 cont_state = True
-cont_action = False
+cont_action = True
 normalised = False
 autoreset = True
 metrics = True

@@ -22,7 +22,6 @@ class EnvState(base_env.EnvState):
     fluid_u: chex.Array
     fluid_v: chex.Array
     time: int
-    key: chex.PRNGKey
 
 
 
@@ -46,33 +45,38 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
 
         self.max_current: float = 0.2
 
-        self.current_noise_scale: float = 0.5
+        self.current_noise_scale: float = 0.04
 
-        self.fluid_grid_size: int = 10
+        self.fluid_grid_size: int = 128
         self.fluid_dt: float = 0.2
         self.fluid_viscosity: float = 1e-6
         self.fluid_iterations: int = 20  # Number of iterations for the linear solver
         self.fluid_force: float = 40.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
         self.current_scaling_factor: float = 1.2  # Scales the effect of the current on the boat
 
-        self.is_homoskedastic: bool = False
+        self.is_deterministic: bool = False
         self.is_heteroskedastic: bool = False
         self.is_non_stationary: bool = False
         self.is_chaotic: bool = True
 
         if self.is_non_stationary:
             self.current_func = self.nonstationary_current_func
+            self.reset_func = self.nonstationary_reset_func
         elif self.is_chaotic:
             self.current_func = self.chaotic_current_func
+            self.reset_func = self.chaotic_reset_func
         else:
             self.current_func = self.stationary_current_func
+            self.reset_func = self.stationary_reset_func
 
-        if self.is_homoskedastic:
-            self.noise_func = self.homoskedastic_noise
-        elif self.is_heteroskedastic:
-            self.noise_func = self.heteroskedastic_noise
-        else:
+        if self.is_deterministic:
             self.noise_func = self.no_noise
+        else:
+            if self.is_heteroskedastic:
+                self.noise_func = self.heteroskedastic_noise
+            else:
+                self.noise_func = self.homoskedastic_noise
+
 
         self.goal_state = jnp.array((self.width, self.length))
 
@@ -86,62 +90,77 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action)
 
-        u, v = self.current_func(state)
-        u, v = self.noise_func(state, u, v, key)
+        uv_interpolated = self._get_current_at_point(state.x, state.y, state.fluid_u, state.fluid_v)
+        uv_noise = self.noise_func(state, state.fluid_u, state.fluid_v, key)
 
-        grid_x = state.x / self.width * self.fluid_grid_size
-        grid_y = state.y / self.length * self.fluid_grid_size
+        # The solver velocity is in units of (grid_cells / fluid_dt), returned as a displacement vector
+        # Scaling factor to make the current's effect noticeable
+        x_hat = state.x + action[0] + uv_interpolated[0] * self.current_scaling_factor + uv_noise[0]
+        y_hat = state.y + action[1] + uv_interpolated[1] * self.current_scaling_factor + uv_noise[1]
 
-        # Create coordinate array for interpolation
-        coords = jnp.array([[grid_y], [grid_x]])
-        # TODO should this be the other way around?
+        u, v = self.current_func(state)  # TODO should it be state or new state idk
 
-        # Bilinearly interpolate the velocity from the fluid grid
-        u_interpolated = jsp.ndimage.map_coordinates(state.fluid_u, coords, order=1, mode='wrap')[0]
-        v_interpolated = jsp.ndimage.map_coordinates(state.fluid_v, coords, order=1, mode='wrap')[0]
-
-        # The solver velocity is in units of (grid_cells / fluid_dt).
-        # We return this as a displacement vector for the agent's timestep.
-        # A scaling factor is used to make the current's effect noticeable.
-        x_hat = state.x + action[0] + u_interpolated * self.current_scaling_factor
-        y_hat = state.y + action[1] + v_interpolated* self.current_scaling_factor
-
-        new_state = EnvState(x=x_hat, y=y_hat, fluid_u=u, fluid_v=v, time=state.time + 1, key=key)
+        new_state = EnvState(x=x_hat, y=y_hat, fluid_u=u, fluid_v=v, time=state.time+1)
 
         reward = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
-                reward,  # TODO check reward is the correct way around
+                reward,
                 self.is_done(new_state),
                 {})
 
     def _get_current_at_point(self, x, y, u_grid, v_grid):
         grid_x = x / self.width * self.fluid_grid_size
         grid_y = y / self.length * self.fluid_grid_size
+
+        # Coordinates for interpolation
         coords = jnp.array([[grid_y], [grid_x]])
+
+        # Bilinearly interpolate the velocity from the fluid grid
         u_interp = jsp.ndimage.map_coordinates(u_grid, coords, order=1, mode='wrap')[0]
         v_interp = jsp.ndimage.map_coordinates(v_grid, coords, order=1, mode='wrap')[0]
+
         return jnp.array([u_interp, v_interp])
 
-    def stationary_current_func(self, state: EnvState) -> chex.Array:
-        return jnp.array((-self.max_current, self.max_current))
+    def stationary_current_func(self, state: EnvState) -> Tuple[chex.Array, chex.Array]:
+        return state.fluid_u, state.fluid_v
 
-    def nonstationary_current_func(self, state: EnvState) -> chex.Array:
-        return jnp.array((-self.max_current + 0.1 * jnp.sin(state.time),
-                          self.max_current,
-                          ))
+    def stationary_reset_func(self, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
+        u_init = -self.max_current * jnp.ones((self.fluid_grid_size, self.fluid_grid_size))
+        v_init = self.max_current * jnp.ones((self.fluid_grid_size, self.fluid_grid_size))
+
+        return u_init, v_init
+
+    def nonstationary_current_func(self, state: EnvState) -> Tuple[chex.Array, chex.Array]:
+        return state.fluid_u + 0.1 * jnp.sin(state.time), state.fluid_v
+        # TODO since time resets at each episode then this isn't fully non-stationary I guess? Although revisiting the same
+        # TODO state in the same episode would be different
+
+    def nonstationary_reset_func(self, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
+        u_init = -self.max_current * jnp.ones((self.fluid_grid_size, self.fluid_grid_size))
+        v_init = self.max_current * jnp.ones((self.fluid_grid_size, self.fluid_grid_size))
+
+        return u_init, v_init
 
     def chaotic_current_func(self, state: EnvState) -> Tuple[chex.Array, chex.Array]:
         u = state.fluid_u
         v = state.fluid_v
 
-        # Example: A circular force field
-        x_coords, y_coords = jnp.meshgrid(jnp.arange(self.fluid_grid_size * self.width),
-                                          jnp.arange(self.fluid_grid_size * self.length))
-        centre_x = (self.fluid_grid_size * self.width) / 2
-        centre_y = (self.fluid_grid_size * self.length) / 2
+        x_coords, y_coords = jnp.meshgrid(jnp.arange(self.fluid_grid_size),
+                                          jnp.arange(self.fluid_grid_size))
+
+        # # A vortex
+        # centre_x = self.fluid_grid_size / 2
+        # centre_y = self.fluid_grid_size / 2
+        # dx, dy = x_coords - centre_x, y_coords - centre_y
+        # force_u = -dy * self.fluid_force * 1e-4
+        # force_v = dx * self.fluid_force * 1e-4
+
+        # Somethig more random
+        centre_x = self.fluid_grid_size / 2
+        centre_y = self.fluid_grid_size / 2
         dx, dy = x_coords - centre_x, y_coords - centre_y
         force_u = -dy * self.fluid_force * 1e-4  # creates a vortex
         # force_u = dy * self.fluid_force * 1e-4
@@ -151,36 +170,49 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         v += self.fluid_dt * force_v
 
         # Standard fluid solver steps (Stable Fluids method)
-        u = self._diffuse(u)
-        v = self._diffuse(v)
-
         u = self._advect(u, u, v)
         v = self._advect(v, u, v)
+
+        u = self._diffuse(u)
+        v = self._diffuse(v)
         u, v = self._project(u, v)
 
         return u, v
 
-    def no_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
-        return u, v
+    def chaotic_reset_func(self, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
+        key, u_key, v_key = jrandom.split(key, 3)
+        u_init = jrandom.normal(u_key, (self.fluid_grid_size, self.fluid_grid_size)) * 0.1
+        v_init = jrandom.normal(v_key, (self.fluid_grid_size, self.fluid_grid_size)) * 0.1
+        # u_init = jnp.zeros((self.fluid_grid_size, self.fluid_grid_size))
+        # v_init = jnp.zeros((self.fluid_grid_size, self.fluid_grid_size))
+        u_init, v_init = self._project(u_init, v_init)
 
-    def homoskedastic_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
+        return u_init, v_init
+
+    def no_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> chex.Array:
+        return jnp.zeros((state.x.shape, state.y.shape))
+
+    def homoskedastic_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> chex.Array:
         x_key, y_key = jrandom.split(key)
-        return jnp.array((current[0] + jrandom.normal(x_key) * self.current_noise_scale,
-                          current[1] + jrandom.normal(y_key) * self.current_noise_scale,
-                          ))
+        new_u = jrandom.normal(x_key, state.x.shape) * self.current_noise_scale
+        new_v = jrandom.normal(x_key, state.y.shape) * self.current_noise_scale
 
-    def heteroskedastic_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
+        return jnp.array((new_u, new_v))
+
+    def heteroskedastic_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> chex.Array:
         x_key, y_key = jrandom.split(key)
         state_depend_x = (state.x / self.width) + 0.5
-        state_depend_y = (state.y / self.length)
-        return jnp.array((current[0] + (jrandom.normal(x_key) * self.current_noise_scale * state_depend_x),
-                          current[1] + (jrandom.normal(y_key) * self.current_noise_scale * state_depend_y),
-                          ))
+        state_depend_y = jnp.sin(state.y)
+
+        new_u = jrandom.normal(x_key, state.x.shape) * self.current_noise_scale * state_depend_x
+        new_v = jrandom.normal(x_key, state.y.shape) * self.current_noise_scale * state_depend_y
+
+        return jnp.array((new_u, new_v))
 
     def _linear_solve(self, x: chex.Array, b: chex.Array, a: float, c: float) -> chex.Array:
         """
-        Solves a linear system using Jacobi iteration with periodic boundary conditions.
-        Used for diffusion and pressure projection.
+        Solves a linear system using Jacobi iteration with periodic boundary conditions
+        Used for diffusion and pressure projection
         """
 
         def body_fun(_, val):
@@ -195,17 +227,17 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
 
     def _diffuse(self, field: chex.Array) -> chex.Array:
         """Applies fluid diffusion (viscosity)"""
-        a = self.fluid_dt * self.fluid_viscosity * (self.fluid_grid_size * self.width) * (self.fluid_grid_size * self.length)
+        a = self.fluid_dt * self.fluid_viscosity * self.fluid_grid_size * self.fluid_grid_size
         return self._linear_solve(field, field, a, 1 + 4 * a)
 
     def _advect(self, field: chex.Array, u: chex.Array, v: chex.Array) -> chex.Array:
-        """Moves a quantity 'field' through the velocity field (u, v)."""
-        x_coords, y_coords = jnp.meshgrid(jnp.arange(self.width * self.fluid_grid_size),
-                                          jnp.arange(self.length * self.fluid_grid_size))
+        """Moves a quantity 'field' through the velocity field (u, v)"""
+        x_coords, y_coords = jnp.meshgrid(jnp.arange(self.fluid_grid_size),
+                                          jnp.arange(self.fluid_grid_size))
 
         # Trace back in time to find the source of the fluid
-        back_x = x_coords - (self.fluid_dt * u * (self.width * self.fluid_grid_size))
-        back_y = y_coords - (self.fluid_dt * v * (self.length * self.fluid_grid_size))
+        back_x = x_coords - (self.fluid_dt * u * self.fluid_grid_size)
+        back_y = y_coords - (self.fluid_dt * v * self.fluid_grid_size)
 
         coords = jnp.stack([back_y, back_x], axis=0)
 
@@ -213,7 +245,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         return jsp.ndimage.map_coordinates(field, coords, order=1, mode='wrap')
 
     def _project(self, u: chex.Array, v: chex.Array) -> Tuple[chex.Array, chex.Array]:
-        """Enforces fluid incompressibility."""
+        """Enforces fluid incompressibility"""
         # Calculate divergence using central differences
         div = -0.5 * (jnp.roll(u, -1, axis=1) - jnp.roll(u, 1, axis=1) +
                       jnp.roll(v, -1, axis=0) - jnp.roll(v, 1, axis=0))
@@ -229,22 +261,13 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         return u_new, v_new
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        # # TODO below is for normal start
-        # u_init = jnp.zeros((self.fluid_grid_size, self.fluid_grid_size))
-        # v_init = jnp.zeros((self.fluid_grid_size, self.fluid_grid_size))
-
-        # TODO below is for fluid solver
-        key, u_key, v_key = jrandom.split(key, 3)
-        u_init = jrandom.normal(u_key, (int(self.fluid_grid_size * self.width), int(self.fluid_grid_size * self.length))) * 0.1
-        v_init = jrandom.normal(v_key, (int(self.fluid_grid_size * self.width), int(self.fluid_grid_size * self.length))) * 0.1
-        u_init, v_init = self._project(u_init, v_init)
+        u_init, v_init = self.reset_func(key)
 
         state = EnvState(x=jnp.zeros(()),
                          y=jnp.zeros(()),
                          fluid_u=u_init,
                          fluid_v=v_init,
-                         time=0,
-                         key=key)
+                         time=0)
 
         return self.get_obs(state), state
 
@@ -264,7 +287,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         return jnp.array([state.x, state.y])
 
     def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
-        return EnvState(x=obs[0], y=obs[1], time=-1, key=key)  # TODO sort this out
+        return EnvState(x=obs[0], y=obs[1], fluid_u=jnp.zeros(()), fluid_v=jnp.zeros(()), time=-1)  # TODO sort this out
 
     def is_done(self, state: EnvState) -> chex.Array:
         x_bounds = jnp.logical_or(state.x >= self.width, state.x < 0)
@@ -280,8 +303,8 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
 
-        x_fine = jnp.linspace(0, self.width, int(self.fluid_grid_size * self.width))
-        y_fine = jnp.linspace(0, self.length, int(self.fluid_grid_size * self.length))
+        x_fine = jnp.linspace(0, self.width, self.fluid_grid_size)
+        y_fine = jnp.linspace(0, self.length, self.fluid_grid_size)
         X_fine, Y_fine = jnp.meshgrid(x_fine, y_fine)
 
         coarse_res = 15  # 25
@@ -289,7 +312,12 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         y_coarse = jnp.linspace(0, self.length, coarse_res)
         X_coarse, Y_coarse = jnp.meshgrid(x_coarse, y_coarse)
 
+        def current_noise(x, y, u, v, key):
+            state = EnvState(x=x, y=y, fluid_u=jnp.zeros(()), fluid_v=jnp.zeros(()), time=-1)
+            return self.noise_func(state, u, v, key)
+
         vmap_current_spatial = jax.vmap(jax.vmap(self._get_current_at_point, in_axes=(0, None, None, None)), in_axes=(None, 0, None, None))
+        vmap_current_noise = jax.vmap(jax.vmap(current_noise, in_axes=(0, None, None, None, 0)), in_axes=(None, 0, None, None, 0))
 
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.set_title(self.name)
@@ -303,18 +331,25 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
                 zorder=4)
         ax.grid(True, linestyle='--', alpha=0.3, zorder=0)
 
+        key = jrandom.key(0)
+        key, _key = jrandom.split(key)
+        batch_key_fine = jrandom.split(_key, X_fine.shape)
+        key, _key = jrandom.split(key)
+        batch_key_coarse = jrandom.split(_key, X_coarse.shape)
+
         initial_u_grid, initial_v_grid = trajectory_state.fluid_u[0], trajectory_state.fluid_v[0]
         initial_current_fine = vmap_current_spatial(x_fine, y_fine, initial_u_grid, initial_v_grid)
-        # initial_current_fine = vmap_current(x_fine, y_fine, trajectory_state.time[0], trajectory_state.key[0])
+        initial_current_fine += vmap_current_noise(x_fine, y_fine, initial_u_grid, initial_v_grid, batch_key_fine)
         initial_mag_fine = jnp.linalg.norm(initial_current_fine, axis=-1)
+        initial_mag_fine = jnp.round(initial_mag_fine, decimals=3)  # stops tiny errors when flow map is constant
         initial_current_coarse = vmap_current_spatial(x_coarse, y_coarse, initial_u_grid, initial_v_grid)
-        # initial_current_coarse = vmap_current(x_coarse, y_coarse, trajectory_state.time[0], trajectory_state.key[0])
+        initial_current_coarse += vmap_current_noise(x_coarse, y_coarse, initial_u_grid, initial_v_grid, batch_key_coarse)
         initial_U, initial_V = initial_current_coarse[:, :, 0], initial_current_coarse[:, :, 1]
 
         # Setup animation elements
         line, = ax.plot([], [], 'r-', lw=2, label='Agent Trail', zorder=3)
         dot, = ax.plot([], [], color="magenta", marker="o", markersize=10, label='Current State', zorder=5)
-        pcm = ax.pcolormesh(X_fine, Y_fine, initial_mag_fine, cmap='viridis', shading='auto', zorder=1, alpha=0.7)
+        pcm = ax.pcolormesh(X_fine, Y_fine, initial_mag_fine, cmap='plasma', shading='auto', zorder=1, alpha=0.7)
         arrow = ax.quiver(X_coarse, Y_coarse, initial_U, initial_V, color='white', angles='xy', scale_units='xy',
                           scale=0.4, width=0.004, zorder=2)
         ax.legend(loc='upper left')
@@ -335,11 +370,11 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
             dot.set_data([trajectory_state.x[frame]], [trajectory_state.y[frame]])
 
             current_vectors_fine = vmap_current_spatial(x_fine, y_fine, trajectory_state.fluid_u[frame], trajectory_state.fluid_v[frame])
-            # current_vectors_fine = vmap_current(x_fine, y_fine, trajectory_state.time[frame], trajectory_state.key[frame])
+            current_vectors_fine += vmap_current_noise(x_fine, y_fine, trajectory_state.fluid_u[frame], trajectory_state.fluid_v[frame], batch_key_fine)
             magnitude_fine = jnp.linalg.norm(current_vectors_fine, axis=-1)
 
             current_vectors_coarse = vmap_current_spatial(x_coarse, y_coarse, trajectory_state.fluid_u[frame], trajectory_state.fluid_v[frame])
-            # current_vectors_coarse = vmap_current(x_coarse, y_coarse, trajectory_state.time[frame], trajectory_state.key[frame])
+            current_vectors_coarse += vmap_current_noise(x_coarse, y_coarse, trajectory_state.fluid_u[frame], trajectory_state.fluid_v[frame], batch_key_coarse)
             U_coarse = current_vectors_coarse[:, :, 0]
             V_coarse = current_vectors_coarse[:, :, 1]
 
@@ -354,7 +389,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
                                        frames=len(trajectory_state.time),
                                        interval=600,
                                        blit=True)
-        anim.save(f"{file_path}_{self.name}.gif")
+        anim.save(f"{file_path}_{self.name}_Dtrmnstc-{self.is_deterministic}_Htrskdstc-{self.is_heteroskedastic}_Nnsttnry-{self.is_non_stationary}_Chaotic-{self.is_chaotic}.gif")
         plt.close()
 
     @property
