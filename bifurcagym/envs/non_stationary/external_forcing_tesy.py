@@ -37,7 +37,7 @@ def vortex_force_new(x_world, y_world, t, amplitude=5.0):
     dx_world = x_world - center_x
     dy_world = y_world - center_y
 
-    force_u = -dy_world * amplitude * 1e-4
+    force_u = -dy_world * amplitude * 1e-2
     force_v = dx_world * amplitude * 1e-2
 
     return force_u, force_v
@@ -51,7 +51,7 @@ def sinusoidal_wave_force(x_world, y_world, t, num_waves=5, key=jrandom.key(0)):
     # Generate fixed random parameters for this test
     k1, k2, k3, k4, k5, k6 = jrandom.split(key, 6)
 
-    amps = jrandom.uniform(k1, (num_waves,)) * 10.0
+    amps = jrandom.uniform(k1, (num_waves,)) * 2.0
     kxs = jrandom.uniform(k2, (num_waves,), minval=0.2, maxval=0.7)
     kys = jrandom.uniform(k3, (num_waves,), minval=0.2, maxval=0.7)
     omegas = jrandom.uniform(k4, (num_waves,), minval=0.1, maxval=0.5)
@@ -103,6 +103,61 @@ def dual_vortex_force(x_world, y_world, t, amplitude=8.0):
     force_v2 = -dx2 * amplitude * 1e-2  # Flipped sign
 
     return force_u1 + force_u2, force_v1 + force_v2
+
+
+@partial(jax.jit, static_argnums=(3, 4, 5, 6))
+def moving_eddies_force(x_world, y_world, t, num_eddies=10, amplitude=10.0, radius=20, max_speed=2,
+                        key=jrandom.PRNGKey(42)):
+    force_u = jnp.zeros_like(x_world, dtype=jnp.float32)
+    force_v = jnp.zeros_like(y_world, dtype=jnp.float32)
+
+    # Generate fixed random parameters for eddies
+    key, _key = jrandom.split(key)
+    initial_pos_x = jrandom.uniform(_key, (num_eddies,)) * fluid_grid_size
+    key, _key = jrandom.split(key)
+    initial_pos_y = jrandom.uniform(_key, (num_eddies,)) * fluid_grid_size
+
+    key, _key = jrandom.split(key)
+    velocities_x = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
+    key, _key = jrandom.split(key)
+    velocities_y = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
+
+    # Random spin direction for each eddy
+    key, _key = jrandom.split(key)
+    spin = jrandom.choice(_key, jnp.array([-1.0, 1.0]), shape=(num_eddies,))
+
+    eddy_params = jnp.stack([initial_pos_x, initial_pos_y, velocities_x, velocities_y, spin], axis=1)
+
+    def apply_eddy(carry, params):
+        force_u_carry, force_v_carry = carry
+        ix, iy, vx, vy, s = params
+
+        # Update eddy center position based on time
+        center_x = ix + vx * t
+        center_y = iy + vy * t
+
+        # Wrap eddies around the domain for continuous flow
+        center_x = jnp.mod(center_x, fluid_grid_size)
+        center_y = jnp.mod(center_y, fluid_grid_size)
+
+        dx = x_world - center_x
+        dy = y_world - center_y
+
+        # Vortex force
+        vortex_u = -dy * 1e-2
+        vortex_v = dx * 1e-2
+
+        # Gaussian falloff for localized effect
+        distance_sq = dx ** 2 + dy ** 2
+        falloff = jnp.exp(-distance_sq / (radius ** 2))
+
+        force_u_carry += vortex_u * falloff * amplitude * s
+        force_v_carry += vortex_v * falloff * amplitude * s
+        return (force_u_carry, force_v_carry), None
+
+    (force_u, force_v), _ = jax.lax.scan(apply_eddy, (force_u, force_v), eddy_params)
+
+    return force_u, force_v
 
 
 def visualise_force_field(force_func, t=0.0, **kwargs):
@@ -171,7 +226,7 @@ def visualise_force_field(force_func, t=0.0, **kwargs):
     # Create the animation
     anim = animation.FuncAnimation(fig,
                                    update,
-                                   frames=20,
+                                   frames=100,
                                    interval=500,
                                    blit=True)
     anim.save("../../../animations/testy.gif")
@@ -179,7 +234,8 @@ def visualise_force_field(force_func, t=0.0, **kwargs):
 
 
 # visualise_force_field(vortex_force)
-visualise_force_field(vortex_force_new)
+# visualise_force_field(vortex_force_new)
 # visualise_force_field(sinusoidal_wave_force)
 # visualise_force_field(horizontal_flow_force)
 # visualise_force_field(dual_vortex_force)
+visualise_force_field(moving_eddies_force)

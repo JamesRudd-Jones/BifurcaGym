@@ -151,20 +151,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         x_coords, y_coords = jnp.meshgrid(jnp.arange(self.fluid_grid_size),
                                           jnp.arange(self.fluid_grid_size))
 
-        # # A vortex
-        # centre_x = self.fluid_grid_size / 2
-        # centre_y = self.fluid_grid_size / 2
-        # dx, dy = x_coords - centre_x, y_coords - centre_y
-        # force_u = -dy * self.fluid_force * 1e-4
-        # force_v = dx * self.fluid_force * 1e-4
-
-        # Somethig more random
-        centre_x = self.fluid_grid_size / 2
-        centre_y = self.fluid_grid_size / 2
-        dx, dy = x_coords - centre_x, y_coords - centre_y
-        force_u = -dy * self.fluid_force * 1e-4  # creates a vortex
-        # force_u = dy * self.fluid_force * 1e-4
-        force_v = dx * self.fluid_force * 1e-4
+        force_u, force_v = self.force_func(x_coords, y_coords, state)
 
         u += self.fluid_dt * force_u
         v += self.fluid_dt * force_v
@@ -178,6 +165,71 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         u, v = self._project(u, v)
 
         return u, v
+
+    def force_func(self, x_coords, y_coords, state):
+        # A vortex
+        centre_x = self.fluid_grid_size / 2
+        centre_y = self.fluid_grid_size / 2
+        dx, dy = x_coords - centre_x, y_coords - centre_y
+        force_u = -dy * self.fluid_force * 1e-4
+        force_v = dx * self.fluid_force * 1e-4
+
+        return force_u, force_v
+
+    @partial(jax.jit, static_argnums=(4, 5, 6, 7))
+    def force_func(self, x_world, y_world, state, num_eddies=10, amplitude=10.0, radius=20, max_speed=2, key=jrandom.PRNGKey(42)):
+        force_u = jnp.zeros_like(x_world, dtype=jnp.float32)
+        force_v = jnp.zeros_like(y_world, dtype=jnp.float32)
+
+        # TODO sort out a proper key here
+
+        # Generate fixed random parameters for eddies
+        key, _key = jrandom.split(key)
+        initial_pos_x = jrandom.uniform(_key, (num_eddies,)) * self.fluid_grid_size
+        key, _key = jrandom.split(key)
+        initial_pos_y = jrandom.uniform(_key, (num_eddies,)) * self.fluid_grid_size
+
+        key, _key = jrandom.split(key)
+        velocities_x = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
+        key, _key = jrandom.split(key)
+        velocities_y = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
+
+        # Random spin direction for each eddy
+        key, _key = jrandom.split(key)
+        spin = jrandom.choice(_key, jnp.array([-1.0, 1.0]), shape=(num_eddies,))
+
+        eddy_params = jnp.stack([initial_pos_x, initial_pos_y, velocities_x, velocities_y, spin], axis=1)
+
+        def apply_eddy(carry, params):
+            force_u_carry, force_v_carry = carry
+            ix, iy, vx, vy, s = params
+
+            # Update eddy center position based on time
+            center_x = ix + vx * state.time
+            center_y = iy + vy * state.time
+
+            # Wrap eddies around the domain for continuous flow
+            center_x = jnp.mod(center_x, self.fluid_grid_size)
+            center_y = jnp.mod(center_y, self.fluid_grid_size)
+
+            dx = x_world - center_x
+            dy = y_world - center_y
+
+            # Vortex force
+            vortex_u = -dy * 1e-2
+            vortex_v = dx * 1e-2
+
+            # Gaussian falloff for localized effect
+            distance_sq = dx ** 2 + dy ** 2
+            falloff = jnp.exp(-distance_sq / (radius ** 2))
+
+            force_u_carry += vortex_u * falloff * amplitude * s
+            force_v_carry += vortex_v * falloff * amplitude * s
+            return (force_u_carry, force_v_carry), None
+
+        (force_u, force_v), _ = jax.lax.scan(apply_eddy, (force_u, force_v), eddy_params)
+
+        return force_u, force_v
 
     def chaotic_reset_func(self, key: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
         key, u_key, v_key = jrandom.split(key, 3)
