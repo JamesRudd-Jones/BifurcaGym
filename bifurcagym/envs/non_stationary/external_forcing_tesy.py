@@ -160,8 +160,8 @@ def moving_eddies_force(x_world, y_world, t, num_eddies=10, amplitude=10.0, radi
     return force_u, force_v
 
 
-def visualise_force_field(force_func, t=0.0, **kwargs):
-    batch_t = jnp.arange(10)
+def visualise_force_field(force_func, frame_num=40, **kwargs):
+    batch_t = jnp.arange(frame_num)
     force_u, force_v = jax.vmap(force_func, in_axes=(None, None, 0))(x_coords, y_coords, batch_t)
     # force_u, force_v = force_func(x_coords, y_coords, t, **kwargs)
 
@@ -226,7 +226,7 @@ def visualise_force_field(force_func, t=0.0, **kwargs):
     # Create the animation
     anim = animation.FuncAnimation(fig,
                                    update,
-                                   frames=100,
+                                   frames=frame_num,
                                    interval=500,
                                    blit=True)
     anim.save("../../../animations/testy.gif")
