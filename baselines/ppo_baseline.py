@@ -99,8 +99,8 @@ config = {"LR": 1e-3,
           }
 
 # total_timesteps = 100000000
-total_timesteps = 70000000
-num_envs = 64
+total_timesteps = 700000#00
+num_envs = 4  # 8  # 64
 rollout_length = 128
 num_updates = total_timesteps // rollout_length // num_envs
 config["MINIBATCH_SIZE"] = (num_envs * rollout_length // config["NUM_MINIBATCHES"])
@@ -299,6 +299,8 @@ timesteps = test_traj_batch.info["timestep"][test_traj_batch.info["returned_epis
 for t in range(len(timesteps)):
     print(f"global step={timesteps[t]}, episodic return={return_values[t]}")
 # print(f"global step={timesteps[-1]}, episodic return={return_values[-1]}")
+
+sys.exit()  # TODO stop rendering for now
 
 # first dim is num updates, second is num steps, third is num env; the last one can be any choice but won't work if num_envs=1
 if metrics:

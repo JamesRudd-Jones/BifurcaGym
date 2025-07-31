@@ -131,7 +131,10 @@ def make(env_id: str,
     elif env_id == "BoatInCurrent-v0":
         if cont_state and cont_action:
             env = boat_in_current.BoatInCurrentCSCA(**env_kwargs)
-        # TODO add in for the others as well
+        elif cont_state and not cont_action:
+            env = boat_in_current.BoatInCurrentCSCA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
 
     else:
         raise ValueError("Environment ID is not registered.")

@@ -47,7 +47,6 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
 
         self.current_noise_scale: float = 0.04
 
-        self.fluid_grid_size: int = 128
         self.fluid_dt: float = 0.2
         self.fluid_viscosity: float = 1e-6
         self.fluid_iterations: int = 20  # Number of iterations for the linear solver
@@ -58,6 +57,13 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         self.is_heteroskedastic: bool = False
         self.is_non_stationary: bool = False
         self.is_chaotic: bool = True
+
+        if self.is_chaotic:
+            self.fluid_grid_size: int = 128
+        else:
+            self.fluid_grid_size: int = 1  # TODO think this is fine since it still applies the stochasticity?
+
+        self.fluid_grid_size_plot = 128
 
         if self.is_non_stationary:
             self.current_func = self.nonstationary_current_func
@@ -166,18 +172,23 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
 
         return u, v
 
-    def force_func(self, x_coords, y_coords, state):
-        # A vortex
-        centre_x = self.fluid_grid_size / 2
-        centre_y = self.fluid_grid_size / 2
-        dx, dy = x_coords - centre_x, y_coords - centre_y
-        force_u = -dy * self.fluid_force * 1e-4
-        force_v = dx * self.fluid_force * 1e-4
+    # def force_func(self, x_coords, y_coords, state):
+    #     # A vortex
+    #     centre_x = self.fluid_grid_size / 2
+    #     centre_y = self.fluid_grid_size / 2
+    #     dx, dy = x_coords - centre_x, y_coords - centre_y
+    #     force_u = -dy * self.fluid_force * 1e-4
+    #     force_v = dx * self.fluid_force * 1e-4
+    #
+    #     return force_u, force_v
 
-        return force_u, force_v
+    def force_func(self, x_world, y_world, state):
+        num_eddies = 10
+        amplitude = 10.0
+        radius = 20
+        max_speed = 2
+        key = jrandom.key(42)  # TODO sort out the above at some point
 
-    @partial(jax.jit, static_argnums=(4, 5, 6, 7))
-    def force_func(self, x_world, y_world, state, num_eddies=10, amplitude=10.0, radius=20, max_speed=2, key=jrandom.PRNGKey(42)):
         force_u = jnp.zeros_like(x_world, dtype=jnp.float32)
         force_v = jnp.zeros_like(y_world, dtype=jnp.float32)
 
@@ -193,6 +204,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         velocities_x = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
         key, _key = jrandom.split(key)
         velocities_y = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
+        # TODO should this not all go in reset and then we apply the eddies at each step?
 
         # Random spin direction for each eddy
         key, _key = jrandom.split(key)
@@ -207,6 +219,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
             # Update eddy center position based on time
             center_x = ix + vx * state.time
             center_y = iy + vy * state.time
+            # TODO above will reset when the env resets so is it truly non-stationary?
 
             # Wrap eddies around the domain for continuous flow
             center_x = jnp.mod(center_x, self.fluid_grid_size)
@@ -242,7 +255,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         return u_init, v_init
 
     def no_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> chex.Array:
-        return jnp.zeros((state.x.shape, state.y.shape))
+        return jnp.zeros((2,))
 
     def homoskedastic_noise(self, state: EnvState, u: chex.Array, v: chex.Array, key: chex.PRNGKey) -> chex.Array:
         x_key, y_key = jrandom.split(key)
@@ -355,8 +368,8 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
 
-        x_fine = jnp.linspace(0, self.width, self.fluid_grid_size)
-        y_fine = jnp.linspace(0, self.length, self.fluid_grid_size)
+        x_fine = jnp.linspace(0, self.width, self.fluid_grid_size_plot)
+        y_fine = jnp.linspace(0, self.length, self.fluid_grid_size_plot)
         X_fine, Y_fine = jnp.meshgrid(x_fine, y_fine)
 
         coarse_res = 15  # 25
@@ -457,4 +470,22 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         return spaces.Box(low, high, (2,))
 
 
+class BoatInCurrentCSDA(BoatInCurrentCSCA):
+    def __init__(self, **env_kwargs):
+        super().__init__(**env_kwargs)
 
+        self.action_array: chex.Array = jnp.array(((0.0, 0.0),
+                                                   (-1.0, 0.0),
+                                                   (-1.0, -1.0),
+                                                   (0.0, -1.0),
+                                                   (1.0, 0.0),
+                                                   (1.0, 1.0),
+                                                   (0.0, 1.0),
+                                                   ))
+
+    def action_convert(self,
+                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        return self.action_array[action.squeeze()]
+
+    def action_space(self) -> spaces.Discrete:
+        return spaces.Discrete(len(self.action_array))
