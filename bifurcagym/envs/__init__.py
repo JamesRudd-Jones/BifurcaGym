@@ -10,7 +10,7 @@ from bifurcagym.envs.continuous_time_chaos import (kuramoto_sivashinsky,
 from bifurcagym.envs.discrete_time_chaos import (henon_map,
                                                  logistic_map,
                                                  tent_map)
-from bifurcagym.envs.non_stationary import (boat_in_current,
+from bifurcagym.envs.non_stationary import (boat_in_current_old,
                                             )
 
 
