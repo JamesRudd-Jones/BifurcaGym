@@ -38,13 +38,16 @@ def run_collocated(size, seed=0, inner_steps=25, outer_steps=100):
 
   # v0[1] = v0[1].replace(data=jnp.zeros((64, 64)))
 
+  forcing = ""
+
   # Define a step function and use it to compute a trajectory.
   # For linear convection, add the argument to semi_implicit_navier_stokes:
   #   `convect=collocated.advection.convect_linear`
   step_fn = funcutils.repeated(collocated.equations.semi_implicit_navier_stokes(density=density,
                                                                                 viscosity=viscosity,
                                                                                 dt=dt,
-                                                                                grid=grid),
+                                                                                grid=grid,
+                                                                                forcing=forcing),
                                steps=inner_steps)
   rollout_fn = jax.jit(funcutils.trajectory(step_fn, outer_steps))
   _, trajectory = jax.device_get(rollout_fn(v0))
