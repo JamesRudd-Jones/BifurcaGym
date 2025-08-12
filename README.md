@@ -51,12 +51,15 @@ BifurcaGym has the following environments currently:
 
 # TODOs
 
+- Should we add back in params outside the env, some cons are we can't always do effective calculation of params, as in
+it is unclear if can do params 1 * param 2 and then store this so don't have to repeat the calc. Some pros are if we want
+non-stationary envs then it may be way easier to define this way outside the env so params can't be changed during an
+episode.
 - Check why normalisation seems to affect results negatively
 - Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing 
 - Add a metrics wrapper and sort out the current one, had some proper testing, sort out how to correctly render if using metrics wrapper
-- I think there way may be a better way to do the wrappers rather than so much duplicate code
 - Add tests for vmap wrapper
-- Should we have state space alongside the observation space?
+- Should we have state space alongside the observation space? Not sure why this is essential really
 - Add rendering for all the envs 
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
 - More verification of environments to reality, unsure exactly how to do this
@@ -74,3 +77,6 @@ Add the following envs:
 - AYS IAM SARL
 - AYS IAM MARL
 - Fusion Problems
+- Wake flow control
+- 3 pinballs or something similar to emulate wind turbine fields
+- Something more complex than KS equations
