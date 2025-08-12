@@ -30,6 +30,8 @@ class PeriodicEnv(object):
 
         # TODO this adds in some error accumulation, can we avoid this?
 
+        # TODO how does this work with the reward function? Do we need to imbue the periodicity there as well?
+
         return wrapped_output
 
     def __getattr__(self, attr):

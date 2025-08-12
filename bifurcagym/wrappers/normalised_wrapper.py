@@ -38,17 +38,20 @@ from bifurcagym import spaces
 
 class NormalisedEnvCSDA(object):
     """
-    Normalises obs to be between -1 and 1
+    Normalises obs and rewards
     """
     def __init__(self, wrapped_normalised_env):
 
         self._wrapped_normalised_env = wrapped_normalised_env
         self.unnorm_action_space = self._wrapped_normalised_env.action_space()
-        self.unnorm_observation_space = self._wrapped_normalised_env.observation_space()
-        self.unnorm_reward_space = self._wrapped_normalised_env.reward_space()
+        self.unnorm_obs_space = self._wrapped_normalised_env.observation_space()
+        self.unnorm_rew_space = self._wrapped_normalised_env.reward_space()
 
-        self.unnorm_obs_space_size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        self.unnorm_rew_space_size = self.unnorm_reward_space.high - self.unnorm_reward_space.low
+        self.unnorm_obs_space_range = self.unnorm_obs_space.high - self.unnorm_obs_space.low
+        self.unnorm_rew_space_range = self.unnorm_rew_space.high - self.unnorm_rew_space.low
+
+        self.norm_obs_space_range = self.observation_space().high - self.observation_space().low
+        self.norm_rew_space_range = self.reward_space().high - self.reward_space().low
 
     @property
     def wrapped_normalised_env(self):
@@ -90,57 +93,64 @@ class NormalisedEnvCSDA(object):
                                                                    self.unnormalise_delta_obs(delta_obs))
         return self.normalise_obs(unnorm_nobs)
 
+    def reward_function(self,
+                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
+                        state_t: EnvState,
+                        state_tp1: EnvState,
+                        key: chex.PRNGKey = None,
+                        ) -> chex.Array:
+        reward = self._wrapped_normalised_env.reward_function(input_action_t, state_t, state_tp1, key)
+        return self.normalise_rew(reward)
+
     def get_state(self, obs: chex.Array) -> EnvState:
         return self._wrapped_normalised_env.get_state(self.unnormalise_obs(obs))
 
     def normalise_obs(self,  obs: chex.Array) -> chex.Array:
-        low = self.unnorm_observation_space.low
-        size = self.unnorm_obs_space_size
-        pos_obs = obs - low
-        norm_obs = (pos_obs / size * 2) - 1
+        pos_obs = obs - self.unnorm_obs_space.low
+        norm_obs = self.norm_obs_space_range * pos_obs / self.unnorm_obs_space_range + self.observation_space().low
 
         return norm_obs
 
     def normalise_delta_obs(self,  obs: chex.Array) -> chex.Array:
-        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        norm_obs = obs / size * 2  # TODO the original states times by two, unsure this is good for true normalisation
+        norm_obs = obs / self.unnorm_obs_space_range * 2  # TODO the original states times by two, unsure this is good for true normalisation
 
         return norm_obs
 
     def normalise_rew(self,  rew: chex.Array) -> chex.Array:
-        low = self.unnorm_reward_space.low
-        size = self.unnorm_rew_space_size
-        pos_rew = rew - low
-        norm_rew = (pos_rew / size * 2) - 1
+        pos_rew = rew - self.unnorm_rew_space.low
+        norm_rew = self.norm_rew_space_range * pos_rew / self.unnorm_rew_space_range + self.reward_space().low
 
         return norm_rew
 
-    def unnormalise_obs(self, obs: chex.Array) -> chex.Array:
-        low = self.unnorm_observation_space.low
-        size = self.unnorm_obs_space_size
-        obs01 = (obs + 1) / 2
-        obs_ranged = obs01 * size
-        unnorm_obs = obs_ranged + low
+    def unnormalise_obs(self, norm_obs: chex.Array) -> chex.Array:
+        pos_obs = self.unnorm_obs_space_range * (norm_obs - self.observation_space().low) / self.norm_obs_space_range
+        obs = pos_obs + self.unnorm_obs_space.low
 
-        return unnorm_obs
+        return obs
 
     def unnormalise_delta_obs(self, obs: chex.Array) -> chex.Array:
-        size = self.unnorm_observation_space.high - self.unnorm_observation_space.low
-        unnorm_obs = obs * size / 2  # TODO see above regarding the original reference
+        range = self.unnorm_obs_space_range
+        unnorm_obs = obs * range / 2  # TODO see above regarding the original reference
 
         return unnorm_obs
+
+    def unnormalise_rew(self, norm_rew: chex.Array) -> chex.Array:
+        pos_rew = self.unnorm_rew_space_range * (norm_rew - self.reward_space().low) / self.norm_rew_space_range
+        rew = pos_rew + self.unnorm_rew_space.low
+
+        return rew
 
     def observation_space(self) -> spaces.Box:
         return spaces.Box(low=-1,
                           high=1,
-                          shape=self.unnorm_observation_space.shape,
-                          dtype=self.unnorm_observation_space.dtype)
+                          shape=self.unnorm_obs_space.shape,
+                          dtype=self.unnorm_obs_space.dtype)
 
     def reward_space(self) -> spaces.Box:
         return spaces.Box(-1,
-                          1,
-                          shape=self.unnorm_reward_space.shape,
-                          dtype=self.unnorm_reward_space.dtype)
+                          0,
+                          shape=self.unnorm_rew_space.shape,
+                          dtype=self.unnorm_rew_space.dtype)
     # TODO what do we want the normalisation of reward to be? Currently to -1 and 1, is that okay?
 
     def __getattr__(self, attr):
@@ -154,13 +164,14 @@ class NormalisedEnvCSDA(object):
 
 class NormalisedEnvCSCA(NormalisedEnvCSDA):
     """
-    Normalises obs to be between -1 and 1
-    Normalises actions to be between -1 and 1
+    Normalises obs and rewards and actions
     """
     def __init__(self, wrapped_normalised_env):
         super().__init__(wrapped_normalised_env)
 
-        self.unnorm_action_space_size = self.unnorm_action_space.high - self.unnorm_action_space.low
+        self.unnorm_action_space_range = self.unnorm_action_space.high - self.unnorm_action_space.low
+
+        self.norm_action_space_range = self.action_space().high - self.action_space().low
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
@@ -173,7 +184,12 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
                                                                                                      state,
                                                                                                      key)
 
-        return self.normalise_obs(unnorm_obs), self.normalise_delta_obs(unnorm_delta_obs), env_state, rew, done, info
+        return (self.normalise_obs(unnorm_obs),
+                self.normalise_delta_obs(unnorm_delta_obs),
+                env_state,
+                self.normalise_rew(rew),
+                done,
+                info)
 
     def reward_function(self,
                         input_action_t: Union[int, float, chex.Array],
@@ -182,25 +198,21 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
                         key: chex.PRNGKey,
                         ) -> chex.Array:
         unnorm_action = self.unnormalise_action(input_action_t)
+        unnorm_reward = self._wrapped_normalised_env.reward_function(unnorm_action, state_t, state_tp1, key)
 
-        return self._wrapped_normalised_env.reward_function(unnorm_action, state_t, state_tp1, key)
-
-    def unnormalise_action(self, action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        low = self.unnorm_action_space.low
-        size = self.unnorm_action_space_size
-        act01 = (action + 1) / 2
-        act_ranged = act01 * size
-        unnorm_act = act_ranged + low
-
-        return unnorm_act
+        return self.normalise_rew(unnorm_reward)
 
     def normalise_action(self, action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        low = self.unnorm_action_space.low
-        size = self.unnorm_action_space_size
-        pos_action = action - low
-        norm_action = (pos_action / size * 2) - 1
+        pos_action = action - self.unnorm_action_space.low
+        norm_action = self.norm_action_space_range * pos_action / self.unnorm_action_space_range + self.action_space().low
 
         return norm_action
+
+    def unnormalise_action(self, norm_action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        pos_action = self.unnorm_action_space_range * (norm_action - self.action_space().low) / self.norm_action_space_range
+        action = pos_action + self.unnorm_action_space.low
+
+        return action
 
     def action_space(self) -> spaces.Box:
         return spaces.Box(low=-1,

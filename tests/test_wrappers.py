@@ -13,10 +13,10 @@ import copy
 
 
 env_names = [
-             # "Acrobot-v0",
+             "Acrobot-v0",
              # "CartPole-v0",
              # "NCartPole-v0",
-             "Pendubot-v0",
+             # "Pendubot-v0",
              # "Pendulum-v0",
              # "WetChicken-v0",
              #  "KS-v0",
@@ -42,10 +42,9 @@ all_combinations = list(itertools.product(env_names,
 
 class TestWrapper:
     def setup_method(self):
-        """Set up common test resources."""
         self.num_steps = 100#0
         self.num_episodes = 10#0
-        self.key = jrandom.PRNGKey(42)
+        self.key = jrandom.key(42)
         self.error = 1e-4
 
     def _test_normalised_obs(self, wrapped_env, obs, w_obs):
@@ -68,12 +67,16 @@ class TestWrapper:
             chex.assert_trees_all_close(nobs, unnorm_w_nobs, atol=self.error)
 
     def _test_rew_fn(self, reward_t, action_t, state_t, state_tp1, w_reward_t, w_action_t, w_state_t, w_state_tp1,
-                     env, wrapped_env, key):
+                     env, wrapped_env, key, normalised):
         reward = env.reward_function(action_t, state_t, state_tp1, key)
         w_reward = wrapped_env.reward_function(w_action_t, w_state_t, w_state_tp1, key)
         chex.assert_trees_all_close(reward, reward_t, atol=self.error)
         chex.assert_trees_all_close(w_reward, w_reward_t, atol=self.error)
-        chex.assert_trees_all_close(reward_t, w_reward_t, atol=self.error)
+        if normalised:
+            unnorm_w_reward_t = wrapped_env.unnormalise_rew(w_reward_t)
+            chex.assert_trees_all_close(reward_t, unnorm_w_reward_t, atol=self.error)
+        else:
+            chex.assert_trees_all_close(reward_t, w_reward_t, atol=self.error)
 
     def _test_apply_delta_obs(self, env, obs, delta_obs, nobs):
         chex.assert_trees_all_close(nobs, env.apply_delta_obs(obs, delta_obs), atol=self.error)
@@ -105,7 +108,7 @@ class TestWrapper:
                     self._test_delta_obs(wrapped_env, obs, nobs, delta_obs, w_obs, w_nobs, w_delta_obs, normalised)
 
                     self._test_rew_fn(rew, action, env_state, nenv_state, w_rew, w_action, w_env_state, w_nenv_state,
-                                      env, wrapped_env, _key)
+                                      env, wrapped_env, _key, normalised)
 
                     self._test_apply_delta_obs(env, obs, delta_obs, nobs)
                     self._test_apply_delta_obs(wrapped_env, w_obs, w_delta_obs, w_nobs)
@@ -165,7 +168,7 @@ class TestWrapper:
     #                 self._test_delta_obs(wrapped_env, obs, nobs, delta_obs, w_obs, w_nobs, w_delta_obs, normalised)
     #
     #                 self._test_rew_fn(rew, action, env_state, nenv_state, w_rew, w_action, w_env_state, w_nenv_state,
-    #                                   env, wrapped_env, _key)
+    #                                   env, wrapped_env, _key, normalised)
     #
     #
     #                 obs = copy.deepcopy(nobs)
@@ -183,7 +186,7 @@ class TestWrapper:
     #     except Exception as e:
     #         pytest.fail(
     #             f"Unexpected error during test_genstep for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
-
+    #
     # def test_autoreset(self, env_name, cont_state, cont_action, normalised):
     #     try:
     #         key, _key = jrandom.split(self.key)

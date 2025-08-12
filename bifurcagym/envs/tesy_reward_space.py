@@ -11,7 +11,7 @@ env_names = [
              # "CartPole-v0",
              # "NCartPole-v0",
              # "Pendubot-v0",
-             "Pendulum-v0",
+             # "Pendulum-v0",
              # "WetChicken-v0",
              #  "KS-v0",
              # "LogisticMap-v0",
@@ -29,9 +29,18 @@ env = bifurcagym.make(env_names[0],
 
 resolution = 200
 actions = jnp.linspace(env.action_space().low, env.action_space().high, resolution)
-obs = jnp.linspace(env.observation_space().low, env.observation_space().high, resolution)
-# TODO should this perhaps be some kind of combination, for example maybe max state[0] and min state[1] my be largely different
-# TODO the above kind of assumes some smoothness in the reward landscape
+
+low_list = env.observation_space().low
+high_list = env.observation_space().high
+
+list_resolution = 10  # resolution // low_list.shape[0]
+num_dims = low_list.shape[0]
+
+grid_axes = [jnp.linspace(low_list[i], high_list[i], list_resolution) for i in range(num_dims)]
+coord_grids = jnp.meshgrid(*grid_axes, indexing='ij')
+stacked_grid = jnp.stack(coord_grids, axis=-1)
+obs = stacked_grid.reshape(-1, num_dims)
+
 state = jax.vmap(env.get_state)(obs)
 
 reward = jax.vmap(jax.vmap(env.reward_function, in_axes=(0, None, None, None)), in_axes=(None, None, 0, None))(actions, jnp.zeros(()), state, key)

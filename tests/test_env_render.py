@@ -36,7 +36,6 @@ all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 
 class TestEnv:
     def setup_method(self):
-        """Set up common test resources."""
         self.num_steps = 200#0
         self.num_episodes = 100
         self.key = jrandom.key(42)

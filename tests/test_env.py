@@ -15,15 +15,16 @@ import itertools
 
 
 env_names = [
-             "Acrobot-v0",
-             "CartPole-v0",
-             "NCartPole-v0",
-             "Pendubot-v0",
-             "Pendulum-v0",
-             "WetChicken-v0",
-              "KS-v0",
-             "LogisticMap-v0",
-             "TentMap-v0",
+             # "Acrobot-v0",
+             # "CartPole-v0",
+             # "NCartPole-v0",
+             # "Pendubot-v0",
+             # "Pendulum-v0",
+             # "WetChicken-v0",
+             #  "KS-v0",
+             # "LogisticMap-v0",
+             # "TentMap-v0",
+             "BoatInCurrent-v0",
              ]
 cont_state = [True, False]
 cont_action = [True, False]
@@ -35,10 +36,9 @@ all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 
 class TestEnv:
     def setup_method(self):
-        """Set up common test resources."""
         self.num_steps = 100#0
         self.num_episodes = 10#0
-        self.key = jrandom.PRNGKey(42)
+        self.key = jrandom.key(42)
         self.error = 1e-4
 
 
