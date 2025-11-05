@@ -24,15 +24,6 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         self.init_r: float = 3.8
         # init_r: float = 4.0
 
-        # fixed_point: float = 0.6  # for r = 2.5; period 1
-        # fixed_point: float = 0.55801  # for r = 3.1; period 2
-        # fixed_point: float = 0.76457  # for r = 3.1; period 2
-        # fixed_point: float = 0.67742  # for r = 3.1; period 1
-        # self.fixed_point: float = 0.737  # for r = 3.8; chaotic
-
-        self.fixed_point: float = (self.init_r - 1) / self.init_r
-        # TODO a calc for period fixed point but be good to generalise to more
-
         self.reward_ball: float = 0.001
 
         self.start_point: float = 0.1
@@ -43,6 +34,20 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         self.max_control: float = 0.1
 
         self.horizon: int = 200
+
+    @property
+    def fixed_point(self) -> float:
+        """
+        Setting as a property ensures that changing self.init_r should change this as well when used
+        Period-1 fixed point r*x*(1-x) = x  => x = (r-1)/r  (guard r==0)."""
+
+        # fixed_point: float = 0.6  # for r = 2.5; period 1
+        # fixed_point: float = 0.55801  # for r = 3.1; period 2
+        # fixed_point: float = 0.76457  # for r = 3.1; period 2
+        # fixed_point: float = 0.67742  # for r = 3.1; period 1
+        # self.fixed_point: float = 0.737  # for r = 3.8; chaotic
+
+        return (self.init_r - 1.0) / self.init_r
 
     def step_env(self,
                  input_action: Union[jnp.int_, jnp.float_, chex.Array],
@@ -102,9 +107,13 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         return EnvState(x=obs[0], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
-        return jax.lax.select(jnp.abs(state.x - self.fixed_point) < self.reward_ball,
-                              jnp.array(True),
-                              jnp.array(False))
+        state_done = jax.lax.select(jnp.abs(state.x - self.fixed_point) < self.reward_ball,
+                                    jnp.array(True),
+                                    jnp.array(False))
+        time_done = jax.lax.select(state.time >= self.horizon,
+                                   jnp.array(True),
+                                   jnp.array(False))
+        return jnp.logical_or(state_done, time_done)
 
     @property
     def name(self) -> str:
