@@ -33,6 +33,8 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
 
         self.max_control: float = 0.1
 
+        self.max_steps_in_episode: int = 300
+
         self.horizon: int = 200
 
     @property
@@ -112,7 +114,7 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         state_done = jax.lax.select(jnp.abs(state.x - self.fixed_point) < self.reward_ball,
                                     jnp.array(True),
                                     jnp.array(False))
-        time_done = jax.lax.select(state.time >= self.horizon,
+        time_done = jax.lax.select(state.time >= self.max_steps_in_episode,
                                    jnp.array(True),
                                    jnp.array(False))
         return jnp.logical_or(state_done, time_done)

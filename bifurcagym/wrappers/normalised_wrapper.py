@@ -192,10 +192,10 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
                 info)
 
     def reward_function(self,
-                        input_action_t: Union[int, float, chex.Array],
+                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
-                        key: chex.PRNGKey,
+                        key: chex.PRNGKey = None,
                         ) -> chex.Array:
         unnorm_action = self.unnormalise_action(input_action_t)
         unnorm_reward = self._wrapped_normalised_env.reward_function(unnorm_action, state_t, state_tp1, key)

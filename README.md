@@ -1,7 +1,5 @@
 # BifurcaGym
 
-## Maybe a better name?
-
 Motivation for these kinds of env, what RL approahes this is good for, and why in Jax
 
 Environments can come in various discrete/continuous state and action space combinations, which can be easily selected 
@@ -51,21 +49,22 @@ BifurcaGym has the following environments currently:
 
 # TODOs
 
-- Should we add back in params outside the env, some cons are we can't always do effective calculation of params, as in
-it is unclear if can do params 1 * param 2 and then store this so don't have to repeat the calc. Some pros are if we want
-non-stationary envs then it may be way easier to define this way outside the env so params can't be changed during an
-episode.
+- Should we add back in params outside the env? Cons of this approach are ineffective calculation of params, as in
+it is unclear if can do params 1 * param 2 and then store this so don't have to repeat the calc. Pros are perhaps for
+non-stationary envs then it may be way easier to define params outside the env so they can change in a functional loop.
 - Check why normalisation seems to affect results negatively
+- Do we still want the reward space so that we can normalise rewards, can we really validate this?
 - Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing 
-- Add a metrics wrapper and sort out the current one, had some proper testing, sort out how to correctly render if using metrics wrapper
-- Add tests for vmap wrapper
+- Add some proper metrics wrapper testing, sort out how to correctly render if using metrics wrapper
 - Should we have state space alongside the observation space? Not sure why this is essential really
 - Add rendering for all the envs 
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
 - More verification of environments to reality, unsure exactly how to do this
 - Create utils for certain env types, e.g. discrete time chaos may all share a projection func
+- Do we even need a vmap wrapper since it is pretty easy to do? If we do then make some tests for it
 
 Add the following envs:
+- N Link Pendulum
 - Bernoulli Map/Dyadic Map
 - LorenzXX
 - Mackey Glass

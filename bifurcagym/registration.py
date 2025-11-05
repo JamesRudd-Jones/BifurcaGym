@@ -67,6 +67,8 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State versions.")
 
+    # TODO add in n pendulum here
+
     elif env_id == "Pendulum-v0":
         if cont_state and cont_action:
             env = pendulum.PendulumCSCA(**env_kwargs)
@@ -156,7 +158,7 @@ def make(env_id: str,
         else:
             raise ValueError("No Normalise Wrapper for Discrete State Continuous Action.")
 
-    # # # Enables an autoresetting environment that works well with Jax, but not necessary for a for loop with conditionals that can't be Jitted
+    # # # Enables an autoresetting environment that works well with jax.lax.scan, but not necessary for a for loop with conditionals that can't be Jitted
     ####################################################################################################################
     if autoreset:
         env = AutoResetWrapper(env)
