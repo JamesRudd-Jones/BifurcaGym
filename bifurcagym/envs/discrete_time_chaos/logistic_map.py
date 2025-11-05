@@ -47,6 +47,8 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         # fixed_point: float = 0.67742  # for r = 3.1; period 1
         # self.fixed_point: float = 0.737  # for r = 3.8; chaotic
 
+        # TODO is there a better way to do this to prevent the repetitive computation?
+
         return (self.init_r - 1.0) / self.init_r
 
     def step_env(self,
