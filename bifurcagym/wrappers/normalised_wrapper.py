@@ -141,14 +141,14 @@ class NormalisedEnvCSDA(object):
         return rew
 
     def observation_space(self) -> spaces.Box:
-        return spaces.Box(low=-1,
-                          high=1,
+        return spaces.Box(low=-jnp.ones_like(self.unnorm_obs_space),
+                          high=jnp.ones_like(self.unnorm_obs_space),
                           shape=self.unnorm_obs_space.shape,
                           dtype=self.unnorm_obs_space.dtype)
 
     def reward_space(self) -> spaces.Box:
-        return spaces.Box(-1,
-                          0,
+        return spaces.Box(low=-jnp.ones_like(self.unnorm_rew_space),
+                          high=jnp.zeros_like(self.unnorm_rew_space),
                           shape=self.unnorm_rew_space.shape,
                           dtype=self.unnorm_rew_space.dtype)
     # TODO what do we want the normalisation of reward to be? Currently to -1 and 1, is that okay?
@@ -215,7 +215,7 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
         return action
 
     def action_space(self) -> spaces.Box:
-        return spaces.Box(low=-1,
-                          high=1,
+        return spaces.Box(low=-jnp.ones(self.unnorm_action_space_range),
+                          high=jnp.ones(self.unnorm_action_space_range),
                           shape=self.unnorm_action_space.shape,
                           dtype=self.unnorm_action_space.dtype)
