@@ -17,14 +17,12 @@ from bifurcagym.wrappers import (AutoResetWrapper,
                                  NormalisedWrapperCSDA,
                                  NormalisedWrapperCSCA,
                                  PeriodicWrapper,
-                                 VMapWrapper
                                  )
 
 
 def make(env_id: str,
          cont_state=False,
          cont_action=False,
-         vmappable=False,
          normalised=False,
          autoreset=False,
          metrics=False,
@@ -165,9 +163,6 @@ def make(env_id: str,
 
     if metrics:
         env = MetricsWrapper(env)
-
-    if vmappable:
-        env = VMapWrapper(env)
 
     return env
 

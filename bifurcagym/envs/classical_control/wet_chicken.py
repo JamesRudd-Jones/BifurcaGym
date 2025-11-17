@@ -213,7 +213,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
         return spaces.Box(low, high, (2,))
 
     def reward_space(self) -> spaces.Box:
-        return spaces.Box(-self.length, 0, (1,), dtype=jnp.float32)
+        return spaces.Box(-self.length, 0, (()), dtype=jnp.float32)
 
 
 class WetChickenCSDA(WetChickenCSCA):

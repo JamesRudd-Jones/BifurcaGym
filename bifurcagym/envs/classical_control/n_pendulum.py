@@ -200,7 +200,7 @@ class NPendulumCSDA(base_env.BaseEnvironment):
 
     def reward_space(self) -> spaces.Box:
         # TODO actually add in the reward space bounds as unsure at the moment
-        return spaces.Box(-100.0, 0.0, (1,), dtype=jnp.float32)
+        return spaces.Box(-100.0, 0.0, (()), dtype=jnp.float32)
 
 
 class NPendulumCSCA(NPendulumCSDA):

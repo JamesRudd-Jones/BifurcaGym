@@ -45,25 +45,21 @@ BifurcaGym has the following environments currently:
 
 # TODOs
 
-- Should we add back in params outside the env? Cons of this approach are ineffective calculation of params, as in
-it is unclear if can do params 1 * param 2 and then store this so don't have to repeat the calc. Pros are perhaps for
-non-stationary envs then it may be way easier to define params outside the env so they can change in a functional loop.
 - Check why normalisation seems to affect results negatively
 - Do we still want the reward space so that we can normalise rewards, can we really validate this?
-- Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing 
-- Add some proper metrics wrapper testing, sort out how to correctly render if using metrics wrapper
-- Should we have state space alongside the observation space? Not sure why this is essential really
-- Add rendering for all the envs 
+- Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
-- More verification of environments to reality, unsure exactly how to do this
 - Create utils for certain env types, e.g. discrete time chaos may all share a projection func
-- Do we even need a vmap wrapper since it is pretty easy to do? If we do then make some tests for it
 - The benefit is that rewards can easily be adjusted by the user. We have tried to keep it comprehensive in that reward 
 functions require the action taken (good for many control tasks where we want to minimise a control signal), the 
 original state, the transitioned to state (allows easy one step state comparison), plus the definition of a key if 
 stochatic rewards are beneficial. However, thought needs to go into how the random process is managed if comparing 
 rewards from the environment with rewards calculated from collected trajectories. A benefit of Jax though is it can be 
 fairly easy to store and track random keys to that this would be possible if needed.
+- Should we add back in params outside the env? Cons of this approach are ineffective calculation of params, as in
+it is unclear if can do params 1 * param 2 and then store this so don't have to repeat the calc. Pros are perhaps for
+non-stationary envs then it may be way easier to define params outside the env so they can change in a functional loop.
+- Do we want a vmap wrapper? Used to have one but removed as felt fairly pointless
 
 Add the following envs:
 - N Link Pendulum
