@@ -50,7 +50,7 @@ class MetricsWrapper(object):
         # base_env_state = self._to_base_env_state(state)
         # obs, delta_obs, new_base_env_state, reward, done, info = self._wrapped_metrics_env.step(action, base_env_state, key)
         # base_dict = dataclasses.asdict(new_base_env_state)
-        base_env_state = self._to_base_env_state(state)
+        # base_env_state = self._to_base_env_state(state)
         obs, delta_obs, nenv_state, reward, done, info = self._wrapped_metrics_env.step(action, state.env_state, key)
         new_episode_return = state.episode_returns + reward
         new_episode_length = state.episode_lengths + 1
