@@ -215,7 +215,7 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
         return action
 
     def action_space(self) -> spaces.Box:
-        return spaces.Box(low=-jnp.ones(self.unnorm_action_space_range),
-                          high=jnp.ones(self.unnorm_action_space_range),
+        return spaces.Box(low=-jnp.ones_like(self.unnorm_action_space_range),
+                          high=jnp.ones_like(self.unnorm_action_space_range),
                           shape=self.unnorm_action_space.shape,
                           dtype=self.unnorm_action_space.dtype)
