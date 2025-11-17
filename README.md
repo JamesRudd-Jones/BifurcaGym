@@ -1,9 +1,13 @@
 # BifurcaGym
 
 Chaotic transition dynamics are found in many natural processes such as fluids, weather, financial systems, ecology and even multi-agent systems.
+
 In many of these scenarios we want to learn behavioural policies towards a desired objective, such as in fluid control (e.g. fluid mixing, aerofoil optimisation), financial or ecosystem control (a stable desired equilibrium), weather model parameter optimisation, autonomous vehicle control under wind/current effects (e.g. underwater drones or sailboats).
+
 However, chaos has a huge impact on Reinforcement Learning or Optimal Control methods as we look to optimise for long horizon sequential tasks.
+
 Due to chaotic dynamics having sensitivity to initial conditions, it can be hard to ensure robustness and accuracy in prediction and control in these types of environments.
+
 Bifurcagym is a collection of environments that experience chaos in their transition dynamics, so that practitioners and theorists can understand the impact chaos has on their algorithm design. 
 
 Bifurcagym is written in Jax to gain the benefits of the enhanced Autodiff and acceleration potential not only for the non-linear environment dynamics (which many require extensive CFD/FEA/FEM solvers) but also in the reduction of overheads between the environment and the agent for Reinforcement Learning/Optimal Control. 
