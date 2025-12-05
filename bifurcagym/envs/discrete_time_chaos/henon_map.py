@@ -32,7 +32,7 @@ class HenonMapCSCA(base_env.BaseEnvironment):
         self.fixed_point: jnp.ndarray = jnp.array((0.631354477,
                                                    0.189406343))
 
-        self.max_control: float = 0.1
+        self.max_control: float = 0.01
 
         self.horizon: int = 200
 
@@ -97,8 +97,12 @@ class HenonMapCSCA(base_env.BaseEnvironment):
         return EnvState(x=obs[0], y=obs[1], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
-        done_condition = jnp.logical_and(jnp.abs(state.x - self.fixed_point[0]) < self.reward_ball,
+        boundary_done_x = jnp.logical_or(state.x <= -10, state.x >= 10)
+        boundary_done_y = jnp.logical_or(state.y <= -10, state.y >= 10)
+        boundary_done = jnp.logical_or(boundary_done_x, boundary_done_y)
+        goal_done = jnp.logical_and(jnp.abs(state.x - self.fixed_point[0]) < self.reward_ball,
                                          jnp.abs(state.y - self.fixed_point[1]) < self.reward_ball,)
+        done_condition = jnp.logical_or(boundary_done, goal_done)
         return jax.lax.select(done_condition,  # TODO is there a better way to do this?
                               jnp.array(True),
                               jnp.array(False))
