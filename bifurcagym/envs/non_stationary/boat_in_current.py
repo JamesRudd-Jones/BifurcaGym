@@ -61,7 +61,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
         self.is_heteroskedastic: bool = False
         self.is_non_stationary: bool = False
         self.is_chaotic: bool = True
-        self.is_chaotic_new: bool = False
+        self.is_chaotic_new: bool = True  # TODO remvove all the old things as new is better although so compute intensive
 
         if self.is_chaotic:
             self.fluid_grid_size: int = 128  # 256
@@ -228,77 +228,77 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
 
         return u_init, v_init
 
-    def force_func(self, x_coords, y_coords, state):
-        # A vortex
-        centre_x = self.fluid_grid_size / 2
-        centre_y = self.fluid_grid_size / 2
-        dx, dy = x_coords - centre_x, y_coords - centre_y
-        force_u = -dy * self.fluid_force * 1e-4
-        force_v = dx * self.fluid_force * 1e-4
-
-        return force_u, force_v
-
-    # def force_func(self, x_world, y_world, state):
-    #     num_eddies = 10
-    #     amplitude = 10.0
-    #     radius = 20
-    #     max_speed = 2
-    #     key = jrandom.key(42)  # TODO sort out the above at some point
-    #
-    #     force_u = jnp.zeros_like(x_world, dtype=jnp.float_)
-    #     force_v = jnp.zeros_like(y_world, dtype=jnp.float_)
-    #
-    #     # TODO sort out a proper key here
-    #
-    #     # Generate fixed random parameters for eddies
-    #     key, _key = jrandom.split(key)
-    #     initial_pos_x = jrandom.uniform(_key, (num_eddies,)) * self.fluid_grid_size
-    #     key, _key = jrandom.split(key)
-    #     initial_pos_y = jrandom.uniform(_key, (num_eddies,)) * self.fluid_grid_size
-    #
-    #     key, _key = jrandom.split(key)
-    #     velocities_x = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
-    #     key, _key = jrandom.split(key)
-    #     velocities_y = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
-    #     # TODO should this not all go in reset and then we apply the eddies at each step?
-    #
-    #     # Random spin direction for each eddy
-    #     key, _key = jrandom.split(key)
-    #     spin = jrandom.choice(_key, jnp.array([-1.0, 1.0]), shape=(num_eddies,))
-    #
-    #     eddy_params = jnp.stack([initial_pos_x, initial_pos_y, velocities_x, velocities_y, spin], axis=1)
-    #
-    #     def apply_eddy(carry, params):
-    #         force_u_carry, force_v_carry = carry
-    #         ix, iy, vx, vy, s = params
-    #
-    #         # Update eddy center position based on time
-    #         center_x = ix + vx * state.time
-    #         center_y = iy + vy * state.time
-    #         # TODO above will reset when the env resets so is it truly non-stationary?
-    #
-    #         # Wrap eddies around the domain for continuous flow
-    #         center_x = jnp.mod(center_x, self.fluid_grid_size)
-    #         center_y = jnp.mod(center_y, self.fluid_grid_size)
-    #
-    #         dx = x_world - center_x
-    #         dy = y_world - center_y
-    #
-    #         # Vortex force
-    #         vortex_u = -dy * 1e-2
-    #         vortex_v = dx * 1e-2
-    #
-    #         # Gaussian falloff for localized effect
-    #         distance_sq = dx ** 2 + dy ** 2
-    #         falloff = jnp.exp(-distance_sq / (radius ** 2))
-    #
-    #         force_u_carry += vortex_u * falloff * amplitude * s
-    #         force_v_carry += vortex_v * falloff * amplitude * s
-    #         return (force_u_carry, force_v_carry), None
-    #
-    #     (force_u, force_v), _ = jax.lax.scan(apply_eddy, (force_u, force_v), eddy_params)
+    # def force_func(self, x_coords, y_coords, state):
+    #     # A vortex
+    #     centre_x = self.fluid_grid_size / 2
+    #     centre_y = self.fluid_grid_size / 2
+    #     dx, dy = x_coords - centre_x, y_coords - centre_y
+    #     force_u = -dy * self.fluid_force * 1e-4
+    #     force_v = dx * self.fluid_force * 1e-4
     #
     #     return force_u, force_v
+
+    def force_func(self, x_world, y_world, state):
+        num_eddies = 10
+        amplitude = 10.0
+        radius = 20
+        max_speed = 2
+        key = jrandom.key(42)  # TODO sort out the above at some point
+
+        force_u = jnp.zeros_like(x_world, dtype=jnp.float_)
+        force_v = jnp.zeros_like(y_world, dtype=jnp.float_)
+
+        # TODO sort out a proper key here
+
+        # Generate fixed random parameters for eddies
+        key, _key = jrandom.split(key)
+        initial_pos_x = jrandom.uniform(_key, (num_eddies,)) * self.fluid_grid_size
+        key, _key = jrandom.split(key)
+        initial_pos_y = jrandom.uniform(_key, (num_eddies,)) * self.fluid_grid_size
+
+        key, _key = jrandom.split(key)
+        velocities_x = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
+        key, _key = jrandom.split(key)
+        velocities_y = jrandom.uniform(_key, (num_eddies,), minval=-max_speed, maxval=max_speed)
+        # TODO should this not all go in reset and then we apply the eddies at each step?
+
+        # Random spin direction for each eddy
+        key, _key = jrandom.split(key)
+        spin = jrandom.choice(_key, jnp.array([-1.0, 1.0]), shape=(num_eddies,))
+
+        eddy_params = jnp.stack([initial_pos_x, initial_pos_y, velocities_x, velocities_y, spin], axis=1)
+
+        def apply_eddy(carry, params):
+            force_u_carry, force_v_carry = carry
+            ix, iy, vx, vy, s = params
+
+            # Update eddy center position based on time
+            center_x = ix + vx * state.time
+            center_y = iy + vy * state.time
+            # TODO above will reset when the env resets so is it truly non-stationary?
+
+            # Wrap eddies around the domain for continuous flow
+            center_x = jnp.mod(center_x, self.fluid_grid_size)
+            center_y = jnp.mod(center_y, self.fluid_grid_size)
+
+            dx = x_world - center_x
+            dy = y_world - center_y
+
+            # Vortex force
+            vortex_u = -dy * 1e-2
+            vortex_v = dx * 1e-2
+
+            # Gaussian falloff for localized effect
+            distance_sq = dx ** 2 + dy ** 2
+            falloff = jnp.exp(-distance_sq / (radius ** 2))
+
+            force_u_carry += vortex_u * falloff * amplitude * s
+            force_v_carry += vortex_v * falloff * amplitude * s
+            return (force_u_carry, force_v_carry), None
+
+        (force_u, force_v), _ = jax.lax.scan(apply_eddy, (force_u, force_v), eddy_params)
+
+        return force_u, force_v
 
     def _linear_solve(self, x: chex.Array, b: chex.Array, a: float, c: float) -> chex.Array:
         """
@@ -410,7 +410,7 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
 
         return done
 
-    def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations/"):
+    def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
         import xarray
