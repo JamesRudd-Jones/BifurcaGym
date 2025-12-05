@@ -93,7 +93,7 @@ class HenonMapCSCA(base_env.BaseEnvironment):
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array((state.x, state.y))
 
-    def get_state(self, obs: chex.Array) -> EnvState:
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         return EnvState(x=obs[0], y=obs[1], time=-1)
 
     def is_done(self, state: EnvState) -> chex.Array:
