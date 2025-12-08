@@ -32,7 +32,7 @@ class HenonMapCSCA(base_env.BaseEnvironment):
         self.fixed_point: jnp.ndarray = jnp.array((0.631354477,
                                                    0.189406343))
 
-        self.max_control: float = 0.01
+        self.max_control: float = 0.1
 
         self.horizon: int = 200
 
