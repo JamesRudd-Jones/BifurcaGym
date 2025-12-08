@@ -80,7 +80,7 @@ class PendulumCSDA(base_env.BaseEnvironment):
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> Tuple[chex.Array. chex.Array]:
+                        ) -> Tuple[chex.Array, chex.Array]:
         action_t = self.action_convert(input_action_t)
         costs = self._angle_normalise(state_tp1.theta) ** 2 + 0.1 * state_tp1.theta_dot ** 2 + 0.001 * (action_t ** 2)
 
