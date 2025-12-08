@@ -21,7 +21,6 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        # Domain bounds
         self.x_bounds = jnp.array((0.0, 2.0))
         self.y_bounds = jnp.array((0.0, 1.0))
 
@@ -29,7 +28,7 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
         self.epsilon = 0.25  # How much the gyres oscillate
         self.omega = 2.0 * jnp.pi / 10.0  # Frequency
 
-        self.max_speed = 0.05  # Agent is slower than peak flow (approx 0.3)
+        self.max_speed = 0.05  # slower than peak flow approx 0.3
         self.dt = 0.1
 
         self.goal_state = jnp.array((1.8, 0.8))
