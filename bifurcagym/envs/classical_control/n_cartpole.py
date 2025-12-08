@@ -83,14 +83,14 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                              theta_dots=theta_dots,
                              time=state.time + 1)
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(new_state),
-                {"discount": self.discount(new_state)})
+                done,
+                {"discount": self.discount(done)})
 
     @staticmethod
     def _angle_normalise(x):
@@ -118,12 +118,12 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                          time=0)
         return self.get_obs(state), state
 
-    def reward_function(self,  # TODO check this
+    def reward_and_done_function(self,  # TODO check this
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> chex.Array:
+                        ) -> Tuple[chex.Array, chex.Array]:
         goal = jnp.array([0.0, self.length_total])
         pendulum_x, pendulum_y = jax.vmap(self._get_coords)(state_tp1.thetas, self.lengths)
         position = jnp.array([state_tp1.x + float(jnp.sum(pendulum_x)), float(jnp.sum(pendulum_y))])
@@ -131,7 +131,7 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         squared_sigma = 0.25 ** 2
         costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
 
-        return -costs
+        return -costs, jnp.array(False)
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -147,16 +147,12 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                                 state.thetas,
                                 state.theta_dots))
 
-    def get_state(self, obs: chex.Array) -> EnvState:  # TODO check this
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:  # TODO check this
         return EnvState(x=obs[0],
                         x_dot=obs[1],
                         thetas=jax.vmap(self._angle_normalise)(obs[2:self.num_poles+2]),
                         theta_dots=obs[self.num_poles+2:],
                         time=-1)
-
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        return jnp.array(False)
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt

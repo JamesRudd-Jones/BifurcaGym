@@ -55,13 +55,13 @@ class BernoulliMapCSCA(base_env.BaseEnvironment):
 
         new_state = EnvState(x=new_x, time=state.time+1)
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(new_state),
+                done,
                 {})
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -77,19 +77,23 @@ class BernoulliMapCSCA(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    def reward_function(self,
+    def reward_and_done_function(self,
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> chex.Array:
+                        ) -> Tuple[chex.Array, chex.Array]:
         """
         As per the paper titled: Optimal chaos control through reinforcement learning
         "https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement"
         """
         reward = -jnp.abs(state_tp1.x - self.fixed_point) ** 2
         # The above can set more specific norm distances
-        return reward
+
+        done = jax.lax.select(jnp.abs(state_tp1.x - self.fixed_point) < self.reward_ball,  # TODO state_t or state_tp1
+                              jnp.array(True),
+                              jnp.array(False))
+        return reward, done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -98,13 +102,8 @@ class BernoulliMapCSCA(base_env.BaseEnvironment):
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array((state.x,))
 
-    def get_state(self, obs: chex.Array) -> EnvState:
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         return EnvState(x=obs[0], time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        return jax.lax.select(jnp.abs(state.x - self.fixed_point) < self.reward_ball,
-                              jnp.array(True),
-                              jnp.array(False))
 
     @property
     def name(self) -> str:

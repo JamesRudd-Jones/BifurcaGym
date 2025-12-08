@@ -66,13 +66,13 @@ class WetChickenCSCA(base_env.BaseEnvironment):
 
         new_state = EnvState(x=x_new, y=y_new, time=state.time+1)
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,  # TODO check reward is the correct way around
-                self.is_done(new_state),
+                done,
                 {})
 
     def _velocity(self, state: EnvState) -> chex.Array:
@@ -90,13 +90,14 @@ class WetChickenCSCA(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    def reward_function(self,
+    def reward_and_done_function(self,
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> chex.Array:
-        return -(self.length - state_tp1.y)
+                        ) -> Tuple[chex.Array, chex.Array]:
+        done = jnp.array(False)  # a continuous task as the environment auto resets as part of the setup
+        return -(self.length - state_tp1.y), done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -105,11 +106,8 @@ class WetChickenCSCA(base_env.BaseEnvironment):
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array([state.x, state.y])
 
-    def get_state(self, obs: chex.Array) -> EnvState:
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         return EnvState(x=obs[0], y=obs[1], time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        return jnp.array(False)  # a continuous task as the environment auto resets as part of the setup
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt

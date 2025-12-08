@@ -5,7 +5,8 @@ from bifurcagym.envs.classical_control import (acrobot,
                                                n_cartpole,
                                                pendulum,
                                                wet_chicken)
-from bifurcagym.envs.continuous_time_chaos import (kuramoto_sivashinsky,
+from bifurcagym.envs.continuous_time_chaos import (double_gyre_flow,
+                                                   kuramoto_sivashinsky,
                                                    )
 from bifurcagym.envs.discrete_time_chaos import (henon_map,
                                                  logistic_map,

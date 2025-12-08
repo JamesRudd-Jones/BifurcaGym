@@ -15,6 +15,7 @@ dependencies = [
     "jax-cfd>=0.2.1",
     "seaborn>=0.13.2",
     "xarray>=2025.6.1",
+    "cmocean>=4.0.3",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"
@@ -30,13 +31,13 @@ build-backend = "pdm.backend"
  verify_ssl = true
  type = "find_links"
 
-                 [tool.pdm.scripts]
+                  [tool.pdm.scripts]
 test.cmd = "pytest -n auto --maxprocesses 8 --dist loadfile"
 # test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
 lint.shell = "ruff . && black --check ."
 fmt.shell = "ruff --fix . && black ."
 
-                 [tool.pdm.dev-dependencies]
+                  [tool.pdm.dev-dependencies]
 dev = [
     "flax>=0.10.6",
     "distrax>=0.1.5",

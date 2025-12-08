@@ -49,13 +49,13 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 
         new_state = EnvState(x=new_x, y=new_y, time=state.time+1)
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(new_state),
+                done,
                 {})
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -75,16 +75,27 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    def reward_function(self,
+    def reward_and_done_function(self,
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> chex.Array:
+                        ) -> Tuple[chex.Array, chex.Array]:
         reward = -jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point, 2)
         # the above can set more specific norm distances
 
-        return reward
+        # TODO state_t or state_tp1
+        boundary_done_x = jnp.logical_or(state_tp1.x <= -10, state_tp1.x >= 10)
+        boundary_done_y = jnp.logical_or(state_tp1.y <= -10, state_tp1.y >= 10)
+        boundary_done = jnp.logical_or(boundary_done_x, boundary_done_y)
+        goal_done = jnp.logical_and(jnp.abs(state_tp1.x - self.fixed_point[0]) < self.reward_ball,
+                                    jnp.abs(state_tp1.y - self.fixed_point[1]) < self.reward_ball, )
+        done_condition = jnp.logical_or(boundary_done, goal_done)
+        done = jax.lax.select(done_condition,  # TODO is there a better way to do this?
+                              jnp.array(True),
+                              jnp.array(False))
+
+        return reward, done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -95,17 +106,6 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 
     def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         return EnvState(x=obs[0], y=obs[1], time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        boundary_done_x = jnp.logical_or(state.x <= -10, state.x >= 10)
-        boundary_done_y = jnp.logical_or(state.y <= -10, state.y >= 10)
-        boundary_done = jnp.logical_or(boundary_done_x, boundary_done_y)
-        goal_done = jnp.logical_and(jnp.abs(state.x - self.fixed_point[0]) < self.reward_ball,
-                                         jnp.abs(state.y - self.fixed_point[1]) < self.reward_ball,)
-        done_condition = jnp.logical_or(boundary_done, goal_done)
-        return jax.lax.select(done_condition,  # TODO is there a better way to do this?
-                              jnp.array(True),
-                              jnp.array(False))
 
     @property
     def name(self) -> str:

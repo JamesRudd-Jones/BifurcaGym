@@ -81,14 +81,14 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                              time=jnp.int32(state.time + 1),
                              )
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(new_state),
-                {"discount": self.discount(new_state)},
+                done,
+                {"discount": self.discount(done)},
                 )
 
     def _dsdt(self, s_augmented: chex.Array, _: jnp.float_) -> chex.Array:
@@ -133,16 +133,16 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    def reward_function(self,
+    def reward_and_done_function(self,
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        )-> chex.Array:
+                        )-> Tuple[chex.Array, chex.Array]:
         done_angle = -jnp.cos(state_tp1.joint_angle_1) - jnp.cos(state_tp1.joint_angle_2 + state_tp1.joint_angle_1) > 1.0
         reward = -1.0 * (1 - done_angle)
 
-        return reward
+        return reward, jnp.array(False)
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -162,19 +162,6 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                         vel_1=obs[4],
                         vel_2=obs[5],
                         time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        # Check termination and construct updated state
-        # done_angle = (
-        #         -jnp.cos(state.joint_angle1)
-        #         - jnp.cos(state.joint_angle2 + state.joint_angle1)
-        #         > 1.0
-        # )
-        # # Check number of steps in episode termination condition
-        # done_steps = state.time >= params.max_steps_in_episode
-        # done = jnp.logical_or(done_angle, done_steps)
-        # return done
-        return jnp.array(False)
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt

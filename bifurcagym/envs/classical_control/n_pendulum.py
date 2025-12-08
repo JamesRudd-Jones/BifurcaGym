@@ -69,13 +69,13 @@ class NPendulumCSDA(base_env.BaseEnvironment):
 
         new_state = EnvState(theta=new_theta, theta_dot=new_theta_dot, time=state.time+1)
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(new_state),
+                done,
                 {})
 
     @staticmethod
@@ -95,19 +95,22 @@ class NPendulumCSDA(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    def reward_function(self,
+    def reward_and_done_function(self,
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> chex.Array:
+                        ) -> Tuple[chex.Array, chex.Array]:
         # penalise absolute link angles (keep chain pointing down), velocities, and torque at base only
         angle_abs_tp1 = jnp.cumsum(state_tp1.theta)
         cost_angles = jnp.sum(self._angle_normalise(angle_abs_tp1) ** 2)
         cost_vel = 0.1 * jnp.sum(state_tp1.theta_dot ** 2)
         action_vec = self.action_convert(input_action_t)
         cost_action = 0.001 * jnp.sum(action_vec ** 2)
-        return -(cost_angles + cost_vel + cost_action)
+
+        done = jnp.array(state_tp1.time >= self.max_steps_in_episode)  # TODO state_t or state_tp1
+
+        return -(cost_angles + cost_vel + cost_action), done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> chex.Array:
@@ -116,13 +119,9 @@ class NPendulumCSDA(base_env.BaseEnvironment):
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.concatenate([state.theta, state.theta_dot])
 
-    def get_state(self, obs: chex.Array) -> EnvState:
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         n = self.n_links
         return EnvState(theta=obs[:n], theta_dot=obs[n:], time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        done = state.time >= self.max_steps_in_episode
-        return jnp.array(done)
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt

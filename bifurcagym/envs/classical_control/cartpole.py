@@ -92,14 +92,14 @@ class CartPoleCSDA(base_env.BaseEnvironment):
                              theta_dot=theta_dot,
                              time=state.time + 1)
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(new_state),
-                {"discount": self.discount(new_state)})
+                done,
+                {"discount": self.discount(done)})
 
     @staticmethod
     def _angle_normalise(x):
@@ -120,12 +120,12 @@ class CartPoleCSDA(base_env.BaseEnvironment):
                          time=0)
         return self.get_obs(state), state
 
-    def reward_function(self,
+    def reward_and_done_function(self,
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> chex.Array:
+                        ) -> Tuple[chex.Array, chex.Array]:
         goal = jnp.array([0.0, self.length])
         pole_x = self.length * jnp.sin(state_tp1.theta)
         pole_y = self.length * jnp.cos(state_tp1.theta)
@@ -134,7 +134,20 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         squared_sigma = 0.25 ** 2
         costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
 
-        return -costs
+        done1 = jnp.logical_or(state_tp1.x < -self.x_threshold,  # TODO state_t or state_tp1
+                               state_tp1.x > self.x_threshold)
+
+        done2 = jnp.logical_or(state_tp1.theta < -self.theta_threshold,
+                               state_tp1.theta > self.theta_threshold,
+                               )
+        # TODO the above is for no swingup
+
+        # done2 = False
+        # TODO the above is for swingup
+
+        done = jnp.logical_or(done1, done2)
+
+        return -costs, done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -147,22 +160,8 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         # Otherwise
         return jnp.array([state.x, state.x_dot, state.theta, state.theta_dot])
 
-    def get_state(self, obs: chex.Array) -> EnvState:
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         return EnvState(x=obs[0], x_dot=obs[1], theta=self._angle_normalise(obs[2]), theta_dot=obs[3], time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        done1 = jnp.logical_or(state.x < -self.x_threshold,
-                               state.x > self.x_threshold)
-
-        done2 = jnp.logical_or(state.theta < -self.theta_threshold,
-                               state.theta > self.theta_threshold,
-                               )
-        # TODO the above is for no swingup
-
-        # done2 = False
-        # TODO the above is for swingup
-
-        return jnp.logical_or(done1, done2)
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt

@@ -57,12 +57,12 @@ class BaseEnvironment(abc.ABC):
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         raise NotImplementedError
 
-    def reward_function(self,
-                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
-                        state_t: EnvState,
-                        state_tp1: EnvState,
-                        key: chex.PRNGKey = None,
-                        )-> chex.Array:
+    def reward_and_done_function(self,
+                                 input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
+                                 state_t: EnvState,
+                                 state_tp1: EnvState,
+                                 key: chex.PRNGKey = None,
+                                 )-> Tuple[chex.Array, chex.Array]:
         # TODO potential issues are any keyed random process added to the action as this may not travel to rewards correctly
         raise NotImplementedError
 
@@ -72,11 +72,8 @@ class BaseEnvironment(abc.ABC):
     def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         raise NotImplementedError
 
-    def is_done(self, state: EnvState) -> chex.Array:
-        raise NotImplementedError
-
-    def discount(self, state: EnvState) -> chex.Array:
-        return jax.lax.select(self.is_done(state), 0.0, 1.0)
+    def discount(self, done: chex.Array) -> chex.Array:
+        return jax.lax.select(done, 0.0, 1.0)
 
     def render_traj(self, state: EnvState, file_path: str):
         raise NotImplementedError

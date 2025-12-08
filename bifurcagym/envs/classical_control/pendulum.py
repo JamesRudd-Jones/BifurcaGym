@@ -53,13 +53,13 @@ class PendulumCSDA(base_env.BaseEnvironment):
 
         new_state = EnvState(theta=newth, theta_dot=newthdot, time=state.time+1)
 
-        reward = self.reward_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
                 jax.lax.stop_gradient(new_state),
                 reward,
-                self.is_done(new_state),
+                done,
                 {})
 
     @staticmethod
@@ -75,15 +75,18 @@ class PendulumCSDA(base_env.BaseEnvironment):
 
         return self.get_obs(state), state
 
-    def reward_function(self,
+    def reward_and_done_function(self,
                         input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                         state_t: EnvState,
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
-                        ) -> chex.Array:
+                        ) -> Tuple[chex.Array. chex.Array]:
         action_t = self.action_convert(input_action_t)
         costs = self._angle_normalise(state_tp1.theta) ** 2 + 0.1 * state_tp1.theta_dot ** 2 + 0.001 * (action_t ** 2)
-        return -costs
+
+        done = jnp.array(state_tp1.time >= self.max_steps_in_episode)  # TODO state_t or state_tp1
+
+        return -costs, done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
@@ -92,12 +95,8 @@ class PendulumCSDA(base_env.BaseEnvironment):
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array([state.theta, state.theta_dot])
 
-    def get_state(self, obs: chex.Array) -> EnvState:
+    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
         return EnvState(theta=obs[0], theta_dot=obs[1], time=-1)
-
-    def is_done(self, state: EnvState) -> chex.Array:
-        done = state.time >= self.max_steps_in_episode
-        return jnp.array(done)
 
     def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
         import matplotlib.pyplot as plt

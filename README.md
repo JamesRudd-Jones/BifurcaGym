@@ -45,6 +45,7 @@ BifurcaGym has the following environments currently:
 
 # TODOs
 
+- Maybe reward function should be reward and done together as they are typically aligned and would save on compute?
 - Check why normalisation seems to affect results negatively
 - Do we still want the reward space so that we can normalise rewards, can we really validate this?
 - Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing
