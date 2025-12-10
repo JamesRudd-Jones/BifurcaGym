@@ -5,7 +5,8 @@ from bifurcagym.envs.classical_control import (acrobot,
                                                wet_chicken)
 
 from bifurcagym.envs.continuous_time_chaos import (double_gyre_flow,
-                                                   kuramoto_sivashinsky)
+                                                   kuramoto_sivashinsky,
+                                                   quadruple_gyre_flow,)
 
 from bifurcagym.envs.discrete_time_chaos import (logistic_map,
                                                  henon_map,
@@ -104,6 +105,14 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State or Discrete Action versions.")
 
+    elif env_id == "QuadrupleGyreFlow-v0":
+        if cont_state and cont_action:
+            env = quadruple_gyre_flow.QuadrupleGyreFlowCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = quadruple_gyre_flow.QuadrupleGyreFlowCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State or Discrete Action versions.")
+
 
     # # # Discrete Time Chaos
     ####################################################################################################################
@@ -197,6 +206,7 @@ registered_envs = ["Acrobot-v0",
                    "WetChicken-v0",
                    "DoubleGyreFlow-v0",
                    "KS-v0",
+                   "QuadrupleGyreFlow-v0",
                    "HenonMap-v0",
                    "LogisticMap-v0",
                    "TentMap-v0",
