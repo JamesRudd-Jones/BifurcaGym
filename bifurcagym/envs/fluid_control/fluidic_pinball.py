@@ -12,6 +12,9 @@ import cmocean
 import numpy as np
 
 
+jax.config.update("jax_enable_x64", True)
+
+
 @struct.dataclass
 class EnvState(base_env.EnvState):
     f: jnp.ndarray
@@ -31,7 +34,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         self.tau = 0.6  # Relaxation time (related to viscosity)
 
         # D2Q9 constraints
-        self.w = jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36])
+        self.w = jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36], dtype=jnp.float64)
         self.idxs = jnp.arange(9)
         self.c = jnp.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1],
                             [1, 1], [-1, 1], [-1, -1], [1, -1]])
@@ -43,7 +46,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
                                   (self.nx // 4 + 40, self.ny // 2 + 25),  # Top cylinder
                                   (self.nx // 4 + 40, self.ny // 2 - 25)  # Bottom cylinder
                                  ))
-        self.radius = 12
+        self.radius = 10
 
         Y, X = jnp.meshgrid(jnp.arange(self.ny), jnp.arange(self.nx), indexing='ij')  # mask for cylinders
 
@@ -62,8 +65,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         self.obs_mask = jnp.array(obs_mask_np)
         self.cyl_id_map = jnp.array(cyl_id_np)
-        self.rel_y = jnp.array(rel_y_np)
-        self.rel_x = jnp.array(rel_x_np)
+        self.rel_y = jnp.array(rel_y_np, dtype=jnp.float64)
+        self.rel_x = jnp.array(rel_x_np, dtype=jnp.float64)
 
         self.max_control = 1
 
@@ -100,61 +103,61 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
                 done,
                 {})
 
-    def LBM_step(self, f, action):
-        rho = jnp.sum(f, axis=0)
-        u = jnp.einsum('ia,ixy->axy', self.c, f) / rho  # (9, 2).T @ (9, ny, nx) -> (2, ny, nx)
+    def LBM_step(self, f_9YX, action):
+        rho_YX = jnp.sum(f_9YX, axis=0)
+        rho_YX = jnp.maximum(rho_YX, 1e-12)  # stops 0 divisions
+        u_2YX = jnp.einsum('ia,ixy->axy', self.c, f_9YX) / rho_YX  # (9, 2).T @ (9, ny, nx) -> (2, ny, nx)
 
-        eu = jnp.einsum('ia,axy->ixy', self.c, u)  # Projection of velocity onto lattice vectors: c_i * u
-        u_sq = jnp.sum(u ** 2, axis=0)
+        eu_9YX = jnp.einsum('ia,axy->ixy', self.c, u_2YX)  # Projection of velocity onto lattice vectors: c_i * u
+        u_sq_YX = jnp.sum(u_2YX ** 2, axis=0)
 
-        # Calculate Equilibrium (Broadcasting over the 9 channels)
-        feq = (self.w[:, None, None] * rho) * (1.0 + 3.0 * eu + 4.5 * eu ** 2 - 1.5 * u_sq)
+        # Calc equilibrium, broadcasting over the 9 channels
+        feq_9YX = (self.w[:, None, None] * rho_YX[None, :, :]) * (1.0 + 3.0 * eu_9YX + 4.5 * eu_9YX ** 2 - 1.5 * u_sq_YX[None, : :])
 
-        f_collided = f - (f - feq) / self.tau  # BGK Collision
+        f_collided_9YX = f_9YX - (f_9YX - feq_9YX) / self.tau  # BGK Collision
 
-        f_post = jnp.where(self.obs_mask[None, :, :], f, f_collided)
+        # Extract omega for each pixel based on cyl_id_map, cyl_id_map is -1 for fluid, 0,1,2 for cylinders.
+        # jnp.take requires careful indexing, clamp -1 to 0 temporarily.
+        omegas_grid_YX = jnp.where(self.cyl_id_map == -1, 0.0, action[jnp.maximum(self.cyl_id_map, 0)])
 
-        f_bounced = f_post[self.opp_idxs, :, :]  # Bounce-back for obstacles - if maske is true, take opposite f
+        # Calc velocity add-ons: u += -omega * dy, v += omega * dx, sum over 3 cylinders to avoid overlap
+        u_wall_x_YX = -omegas_grid_YX * self.rel_y * 0.01
+        u_wall_y_YX = omegas_grid_YX * self.rel_x * 0.01
 
-        # Add Momentum for Rotation (Moving Wall Boundary), for non-obstacle pixels, u_wall is 0.
-        # For obstacle pixels, u_wall depends on which cylinder it is (cyl_id_map)
+        # Compute c_i · u_wall for each i
+        ci_dot_uwall_9YX = (self.c[:, 0, None, None] * u_wall_x_YX[None, :, :] +
+                        self.c[:, 1, None, None] * u_wall_y_YX[None, :, :])
 
-        # Extract omega for each pixel based on cyl_id_map
-        # cyl_id_map is -1 for fluid, 0,1,2 for cylinders.
-        # jnp.take requires careful indexing. We clamp -1 to 0 temporarily.
-        omegas_grid = action[jnp.maximum(self.cyl_id_map, 0)]
-        # Where cyl_id_map is -1, set omega to 0
-        omegas_grid = jnp.where(self.cyl_id_map == -1, 0.0, omegas_grid)
+        # Compute bounce-back base: f_bb = f_collided[opp_idxs, :, :]
+        f_bb_9YX = f_collided_9YX[self.opp_idxs, :, :]
 
-        # Calculate velocity add-ons: u += -omega * dy, v += omega * dx, sum over 3 cylinders to avoid overlap
-        u_wall_x = -omegas_grid * self.rel_y * 0.01
-        u_wall_y = omegas_grid * self.rel_x * 0.01
+        # Moving-wall correction factor: + 6 * w * rho * (c_i · u_wall)
+        correction_9YX = 6.0 * self.w[:, None, None] * rho_YX[None, :, :] * ci_dot_uwall_9YX
 
-        def add_wall_correction(i, w_i, f_chan):
-            ci_dot_uwall = self.c[i, 0] * u_wall_x + self.c[i, 1] * u_wall_y
-            correction = 6.0 * w_i * 1.0 * ci_dot_uwall
-            return f_chan + correction
+        # Corrected bounce-back
+        f_bounced_corrected_9YX = f_bb_9YX + correction_9YX
 
-        f_corrected = jax.vmap(add_wall_correction)(jnp.arange(9), self.w, f_bounced)
-
-        # Apply mask: Fluid -> f_post, Obstacle -> f_corrected
-        f_post = jnp.where(self.obs_mask[None, :, :], f_corrected, f_post)
+        # Create f_post: fluid nodes keep f_collided, obstacle nodes get f_bounced_corrected
+        obs_mask_1YX = self.obs_mask[None, :, :]
+        f_post_9YX = jnp.where(obs_mask_1YX, f_bounced_corrected_9YX, f_collided_9YX)
 
         def roll_channel(f_i, c_i):
             # Roll x (axis 1), then roll y (axis 0)
-            return jnp.roll(jnp.roll(f_i, c_i[0], axis=1), c_i[1], axis=0)
+            return jnp.roll(jnp.roll(f_i, -c_i[0], axis=1), -c_i[1], axis=0)
 
-        f_streamed = jax.vmap(roll_channel)(f_post, self.c)
+        f_streamed_9YX = jax.vmap(roll_channel)(f_post_9YX, self.c)
 
-        # 5. Inlet / Outlet
-        # Inlet: Fixed velocity (Left wall, x=0)
-        # We calculate equilibrium for rho=1, u=(0.1, 0)
         u_inlet = 0.1
-        inlet_condition = self.w[:, None] * (1 + 3 * u_inlet)
-        f_streamed = f_streamed.at[:, :, 0].set(inlet_condition)
-        f_streamed = f_streamed.at[:, :, -1].set(f_streamed[:, :, -2])  #  Outlet: Zero Gradient (Right wall, x=-1) copy from x=-2
+        rho_in = 1.0
+        # compute eu_in for each direction
+        eu_in_9 = (self.c[:, 0] * u_inlet)
+        u_sq_in = u_inlet ** 2
+        feq_in_9 = self.w * rho_in * (1.0 + 3.0 * eu_in_9 + 4.5 * (eu_in_9 ** 2) - 1.5 * u_sq_in)
+        # set entire left column to feq_in for all y
+        f_streamed_9YX = f_streamed_9YX.at[:, :, 0].set(feq_in_9[:, None])
+        f_streamed_9YX = f_streamed_9YX.at[:, :, -1].set(f_streamed_9YX[:, :, -2])  # copy from x=-2 to x=-1 (zero gradient)
 
-        return f_streamed
+        return f_streamed_9YX
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)

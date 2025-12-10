@@ -59,6 +59,7 @@ class TestEnv:
                 # action = env.action_space().sample(_key)
                 # action = jnp.sin(0.5 * env_state.time) * 0.1 * jnp.cos(env_state.time)
                 action = jnp.ones(1,) * env.action_space().high
+                action = jnp.zeros(env.action_space().shape[0])
                 key, _key = jrandom.split(key)
                 nobs, delta_obs, next_env_state, rew, done, info = env.step(action, env_state, _key)
 
