@@ -21,9 +21,10 @@ env_names = [
              # "Pendubot-v0",
              # "Pendulum-v0",
              # "WetChicken-v0",
-             # "DoubleGyreFlow-v0"
+             "BickleyJetFlow-v0",
+             # "DoubleGyreFlow-v0",
              #  "KS-v0",
-              "QuadrupleGyreFlow-v0"
+             #  "QuadrupleGyreFlow-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
              # "FluidicPinball-v0",
