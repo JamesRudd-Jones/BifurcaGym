@@ -21,6 +21,8 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
+        # TODO do we need float 64?
+
         self.x_bounds = jnp.array((0.0, 2.0))
         self.y_bounds = jnp.array((0.0, 1.0))
 

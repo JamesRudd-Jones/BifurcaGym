@@ -47,6 +47,8 @@ BifurcaGym has the following environments currently:
 
 - Maybe reward function should be reward and done together as they are typically aligned and would save on compute?
 - Check why normalisation seems to affect results negatively
+- Get state only works for fully observable enbs, we need to verify why we need this, I think it is because of the 
+generative env, need to clarify this and find a workaround, is there a better way to do it?
 - Do we still want the reward space so that we can normalise rewards, can we really validate this?
 - Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well

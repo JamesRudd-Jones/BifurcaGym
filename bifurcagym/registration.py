@@ -11,6 +11,8 @@ from bifurcagym.envs.discrete_time_chaos import (logistic_map,
                                                  henon_map,
                                                  tent_map,
                                                  )
+from bifurcagym.envs.fluid_control import (fluidic_pinball,
+                                           )
 from bifurcagym.envs.non_stationary import (boat_in_current,
                                             )
 from bifurcagym.wrappers import (AutoResetWrapper,
@@ -135,6 +137,17 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State Continuous Action version.")
 
+    # # # Fluid Control
+    ####################################################################################################################
+    elif env_id == "FluidicPinball-v0":
+        if cont_state and cont_action:
+            env = fluidic_pinball.FluidicPinballCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = fluidic_pinball.FluidicPinballCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State or Discrete Action versions.")
+
+
     # # # Non-Stationary
     ####################################################################################################################
     elif env_id == "BoatInCurrent-v0":
@@ -187,5 +200,6 @@ registered_envs = ["Acrobot-v0",
                    "HenonMap-v0",
                    "LogisticMap-v0",
                    "TentMap-v0",
+                   "FluidicPinball-v0",
                    "BoatInCurrent-v0"
                    ]
