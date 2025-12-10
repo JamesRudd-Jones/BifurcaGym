@@ -73,7 +73,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         self.downsample_val = 20
 
         self.steps_per_env_step = 10
-        self.burn_in_steps = 100  # 2000
+        self.burn_in_steps = 200  # 2000
 
         self.max_steps = 1000
 
@@ -143,7 +143,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         def roll_channel(f_i, c_i):
             # Roll x (axis 1), then roll y (axis 0)
-            return jnp.roll(jnp.roll(f_i, -c_i[0], axis=1), -c_i[1], axis=0)
+            return jnp.roll(jnp.roll(f_i, c_i[0], axis=1), c_i[1], axis=0)
 
         f_streamed_9YX = jax.vmap(roll_channel)(f_post_9YX, self.c)
 
