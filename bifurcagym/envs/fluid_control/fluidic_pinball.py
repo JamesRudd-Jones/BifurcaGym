@@ -65,11 +65,14 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         self.rel_y = jnp.array(rel_y_np)
         self.rel_x = jnp.array(rel_x_np)
 
-        self.max_control = 0.1
+        self.max_control = 1
 
         self.downsample_val = 20
 
         self.steps_per_env_step = 10
+        self.burn_in_steps = 100  # 2000
+
+        self.max_steps = 1000
 
     def step_env(self,
                  input_action: Union[jnp.int_, jnp.float_, chex.Array],
@@ -124,8 +127,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         omegas_grid = jnp.where(self.cyl_id_map == -1, 0.0, omegas_grid)
 
         # Calculate velocity add-ons: u += -omega * dy, v += omega * dx, sum over 3 cylinders to avoid overlap
-        u_wall_x = -omegas_grid * self.rel_y * 0.005
-        u_wall_y = omegas_grid * self.rel_x * 0.005
+        u_wall_x = -omegas_grid * self.rel_y * 0.01
+        u_wall_y = omegas_grid * self.rel_x * 0.01
 
         def add_wall_correction(i, w_i, f_chan):
             ci_dot_uwall = self.c[i, 0] * u_wall_x + self.c[i, 1] * u_wall_y
@@ -167,7 +170,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         def burn_in(f, unused):
             return self.LBM_step(f, jnp.zeros(3)), None
 
-        f, _ = jax.lax.scan(burn_in, f_init, None, 2000)  # 2000 burn in steps
+        f, _ = jax.lax.scan(burn_in, f_init, None, self.burn_in_steps)
 
         state = EnvState(f=f, time=0)
 
@@ -191,8 +194,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         reward = -(100.0 * drag_cost) - (10.0 * lift_cost) - (0.1 * act_cost)
 
         # Check stability
-        done = (state_tp1.time >= 500) | jnp.any(jnp.isnan(state_tp1.f)) | (jnp.max(jnp.abs(u)) > 0.5)
-        # TODO should change the 500 hardcoding to an env param
+        done = (state_tp1.time >= self.max_steps) | jnp.any(jnp.isnan(state_tp1.f)) | (jnp.max(jnp.abs(u)) > 0.5)
 
         return reward, done
 
