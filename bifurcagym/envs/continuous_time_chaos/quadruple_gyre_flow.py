@@ -188,7 +188,9 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
         return spaces.Box(-self.max_speed, self.max_speed, shape=(2,), dtype=jnp.float64)
 
     def observation_space(self) -> spaces.Box:
-        return spaces.Box(-1.4, 1.4, (2,), dtype=jnp.float64)
+        lo = jnp.array((self.x_bounds[0], self.y_bounds[0]))
+        hi = jnp.array((self.x_bounds[1], self.y_bounds[1]))
+        return spaces.Box(lo, hi, (2,), dtype=jnp.float64)
 
 
 class QuadrupleGyreFlowCSDA(QuadrupleGyreFlowCSCA):
