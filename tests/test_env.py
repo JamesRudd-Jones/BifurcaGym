@@ -25,8 +25,8 @@ env_names = [
              #  "KS-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
-             # "FluidicPinball-v0",
-             "BoatInCurrent-v0",
+             "FluidicPinball-v0",
+             # "BoatInCurrent-v0",
              ]
 # cont_state = [True, False]
 # cont_action = [True, False]

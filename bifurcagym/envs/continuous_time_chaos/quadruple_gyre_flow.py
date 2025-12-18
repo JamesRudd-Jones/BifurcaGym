@@ -132,7 +132,7 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
                 zorder=4)
         ax.grid(True, linestyle='--', alpha=0.3, zorder=0)
 
-        cmap_val = cmocean.cm.deep
+        cmap_val = cmocean.cm.deep_r
 
         initial_U_coarse, initial_V_coarse = self._get_flow_velocity(X_coarse, Y_coarse, trajectory_state.time[0] * self.dt)
         initial_U_fine, initial_V_fine = self._get_flow_velocity(X_fine, Y_fine, trajectory_state.time[0] * self.dt)

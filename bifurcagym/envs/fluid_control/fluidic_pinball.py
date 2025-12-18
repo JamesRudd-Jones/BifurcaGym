@@ -109,19 +109,17 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         f_boundary = self._boundary_conditions(f_post_coll, action)
 
-        # def _stream(f):
-        #     f_streamed = f
-        #     for i in range(1, 9):
-        #         f_streamed = f_streamed.at[:, :, i].set(jnp.roll(f[:, :, i], shift=self.c[i], axis=(1, 0)))
-        #     return f_streamed
-        #
-        # f_next = _stream(f_boundary)
+        f0 = f_boundary[:, :, 0]
+        f1 = jnp.roll(f_boundary[:, :, 1], (1, 0), axis=(1, 0))
+        f2 = jnp.roll(f_boundary[:, :, 2], (0, 1), axis=(1, 0))
+        f3 = jnp.roll(f_boundary[:, :, 3], (-1, 0), axis=(1, 0))
+        f4 = jnp.roll(f_boundary[:, :, 4], (0, -1), axis=(1, 0))
+        f5 = jnp.roll(f_boundary[:, :, 5], (1, 1), axis=(1, 0))
+        f6 = jnp.roll(f_boundary[:, :, 6], (-1, 1), axis=(1, 0))
+        f7 = jnp.roll(f_boundary[:, :, 7], (-1, -1), axis=(1, 0))
+        f8 = jnp.roll(f_boundary[:, :, 8], (1, -1), axis=(1, 0))
 
-        def stream_step(f, idx):
-            f = f.at[:, :, idx].set(jnp.roll(f_boundary[:, :, idx], shift=self.c[idx], axis=(1, 0)))
-            return f, None
-
-        f_next, _ = jax.lax.scan(stream_step, f_boundary, jnp.arange(1, 9, 1), 8)
+        f_next = jnp.stack((f0, f1, f2, f3, f4, f5, f6, f7, f8), axis=2)
 
         drag, lift = self._calculate_forces(f_post_coll, f_boundary)
 
@@ -129,11 +127,9 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
     def _get_equilibrium(self, rho, u):
         # Projects macroscopic velocity onto discrete directions
-        cu = jnp.einsum('...d,qd->...q', u, self.c)
-        usqr = jnp.einsum('...d,...d->...', u, u)
-        cu3 = 3.0 * cu
-        usqr = usqr[..., jnp.newaxis]
-        feq = self.w * rho * (1.0 + cu3 + 0.5 * cu3 ** 2 - 1.5 * usqr)
+        cu = jnp.dot(u, self.c.T)
+        usqr = jnp.sum(u ** 2, axis=-1, keepdims=True)
+        feq = self.w * rho * (1 + 3 * cu + 4.5 * cu ** 2 - 1.5 * usqr)
         return feq
 
     def _boundary_conditions(self, f, action):
@@ -143,119 +139,89 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         2. Outlet (Right) - Outflow
         3. Cylinders - Rotating Bounce-Back (The 'Action')
         """
-        # --- 1. Cylinders (Moving Bounce-Back) ---
-        # We need the velocity AT the surface of the cylinders
-        # Action = [omega1, omega2, omega3] (Angular velocities)
+        # ---------------------------------------------------------
+        # 1. Cylinders: Moving bounce-back (vectorized)
+        # ---------------------------------------------------------
 
-        f_new = f
+        # centres: (Ncyl, 2)
+        # action:  (Ncyl,)
+        cx = self.centres[:, 0][:, None, None]  # (Ncyl, 1, 1)
+        cy = self.centres[:, 1][:, None, None]
+        omega = action[:, None, None]
 
-        # # Iterate over 3 cylinders (Unrolled loop)
-        # for i in range(3):
-        #     cx, cy = self.centres[i]
-        #     omega = action[i]
-        #
-        #     # Determine velocity of the wall: v = omega x r
-        #     # u_wall_x = -omega * (y - cy)
-        #     # u_wall_y =  omega * (x - cx)
-        #     uw_x = -omega * (self.Y - cy)
-        #     uw_y = omega * (self.X - cx)
-        #
-        #     # We only care about this velocity AT the solid boundary pixels
-        #     # Standard bounce-back: f_in(direction) -> f_out(opposite)
-        #     # Moving wall correction: f_out = f_in - 2*w*rho*(u_wall . c)/cs2
-        #
-        #     # Calculate momentum correction term
-        #     # Dot product of Wall Velocity and Direction Vectors
-        #     # We do this for all 9 directions at once
-        #     wall_dot_c = (uw_x[..., None] * self.c[:, 0]) + (uw_y[..., None] * self.c[:, 1])
-        #     correction = 2.0 * self.w * 1.0 * (wall_dot_c / self.cs2)  # approx rho=1.0 at wall
-        #
-        #     # Apply specifically where the mask is solid
-        #     # Note: In a full code, we optimize to only do boundary nodes.
-        #     # Here we mask the whole grid for simplicity.
-        #     f_bounced = f[:, :, self.opp_idxs]  # The standard bounce
-        #     f_rotated = f_bounced - correction
-        #
-        #     # Update ONLY the solid pixels for this cylinder
-        #     # Create a specific mask for this cylinder to avoid overlap issues
-        #     dist = jnp.sqrt((self.X - cx) ** 2 + (self.Y - cy) ** 2)
-        #     cyl_mask = (dist <= 10.0)  # Match radius above
-        #
-        #     f_new = jnp.where(cyl_mask[..., None], f_rotated, f_new)
+        # Wall velocity: u = omega x r
+        uw_x = -omega * (self.Y - cy)
+        uw_y = omega * (self.X - cx)
 
-        # --- 2. Inlet (Left Wall) ---
-        # Enforce constant velocity u_inlet
-        # (Simplified Zou-He or Equilibrium imposition)
+        # Wall velocity dot lattice directions
+        # Result: (Ncyl, ny, nx, 9)
+        wall_dot_c = (uw_x[..., None] * self.c[:, 0] + uw_y[..., None] * self.c[:, 1])
 
-        # Iterate over 3 cylinders (Unrolled loop)
-        def cylinder_step(f_new, centres_action_concat):
-            # cx, cy = self.centres[i]
-            # omega = action[i]
-            cx, cy, omega = centres_action_concat
+        correction = 2.0 * self.w * (wall_dot_c / self.cs2)
 
-            # Determine velocity of the wall: v = omega x r
-            # u_wall_x = -omega * (y - cy)
-            # u_wall_y =  omega * (x - cx)
-            uw_x = -omega * (self.Y - cy)
-            uw_y = omega * (self.X - cx)
+        # Standard bounce-back
+        f_bounced = f[..., self.opp_idxs]  # (ny, nx, 9)
 
-            # We only care about this velocity AT the solid boundary pixels
-            # Standard bounce-back: f_in(direction) -> f_out(opposite)
-            # Moving wall correction: f_out = f_in - 2*w*rho*(u_wall . c)/cs2
+        # Rotating bounce-back per cylinder
+        f_rotated = f_bounced[None, ...] - correction
 
-            # Calculate momentum correction term
-            # Dot product of Wall Velocity and Direction Vectors
-            # We do this for all 9 directions at once
-            wall_dot_c = (uw_x[..., None] * self.c[:, 0]) + (uw_y[..., None] * self.c[:, 1])
-            correction = 2.0 * self.w * 1.0 * (wall_dot_c / self.cs2)  # approx rho=1.0 at wall
+        # Cylinder masks (use squared distance)
+        r2 = (self.X - cx) ** 2 + (self.Y - cy) ** 2
+        cyl_mask = r2 <= (10.0 ** 2)  # (Ncyl, ny, nx)
 
-            # Apply specifically where the mask is solid
-            # Note: In a full code, we optimize to only do boundary nodes.
-            # Here we mask the whole grid for simplicity.
-            f_bounced = f[:, :, self.opp_idxs]  # The standard bounce
-            f_rotated = f_bounced - correction
+        # Combine cylinders safely (no overwrite ambiguity)
+        cyl_mask_any = jnp.any(cyl_mask, axis=0)
 
-            # Update ONLY the solid pixels for this cylinder
-            # Create a specific mask for this cylinder to avoid overlap issues
-            dist = jnp.sqrt((self.X - cx) ** 2 + (self.Y - cy) ** 2)
-            cyl_mask = (dist <= 10.0)  # Match radius above
+        # If overlapping cylinders exist, last one wins (consistent with scan)
+        idx = jnp.argmax(cyl_mask, axis=0)
+        f_cyl = jnp.take_along_axis(f_rotated, idx[None, ..., None], axis=0)[0]
 
-            f_new = jnp.where(cyl_mask[..., None], f_rotated, f_new)
+        f_new = jnp.where(cyl_mask_any[..., None], f_cyl, f)
 
-            return f_new, None
-
-        scan_input = jnp.concatenate((self.centres, jnp.expand_dims(action, axis=-1)), axis=-1)
-        f_new, _ = jax.lax.scan(cylinder_step, f_new, scan_input, 3)
+        # ---------------------------------------------------------
+        # 2. Inlet (Left boundary): Constant velocity
+        # ---------------------------------------------------------
 
         rho_inlet = 1.0
-        u_vec_inlet = jnp.zeros((self.ny, 1, 2)).at[..., 0].set(self.u_inlet)
-        feq_inlet = self._get_equilibrium(rho_inlet, u_vec_inlet)
-        f_new = f_new.at[:, 0, :].set(feq_inlet[:, 0, :])  # Force the left column to be equilibrium
-        f_new = f_new.at[:, -1, :].set(f_new[:, -2, :])  # Zero-gradient (copy second to last column to last column)
+        u_inlet_vec = jnp.zeros((self.ny, 1, 2)).at[..., 0].set(self.u_inlet)
+        feq_inlet = self._get_equilibrium(rho_inlet, u_inlet_vec)
+
+        f_new = f_new.at[:, 0, :].set(feq_inlet[:, 0, :])
+
+        # ---------------------------------------------------------
+        # 3. Outlet (Right boundary): Zero-gradient
+        # ---------------------------------------------------------
+
+        f_new = f_new.at[:, -1, :].set(f_new[:, -2, :])
 
         return f_new
 
     def _calculate_forces(self, f_pre_collision, f_post_collision):
         """
-        Calculates Drag and Lift using the Momentum Exchange Method.
-        Force = Sum of momentum transferred during bounce-back.
+        Optimized calculation using einsum to avoid intermediate array allocations.
+        Calculates Sum(mask * (f_post - f_pre) * c) in a single pass.
         """
-        # Momentum exchange is essentially: (f_in + f_out) * c
-        # We sum this over all boundary nodes.
+        # 1. Compute the momentum change (XLA will fuse this difference into the einsum kernel)
+        delta_f = f_post_collision - f_pre_collision
 
-        # This is a simplified proxy:
-        # Drag is roughly proportional to the momentum lost in X direction
-        # Lift is proportional to momentum lost in Y direction
+        # 2. Use einsum to contract dimensions efficiently.
+        # String '...,...q,qd->d':
+        #   '...' : Matches spatial dimensions (Nx, Ny) of the mask and f
+        #   'q'   : Matches the discrete velocity direction (Q)
+        #   'd'   : Matches the vector components (x, y) of c
+        #
+        # Operations:
+        #   - Broadcasts mask (...) against delta_f (...q)
+        #   - Projects delta_f onto c (qd)
+        #   - Sums over all spatial (...) and direction (q) indices
+        #   - Returns vector d (fx, fy)
 
-        # We isolate the solid nodes
-        f_solid = jnp.where(self.mask_solid[..., None], f_post_collision - f_pre_collision, 0.0)
+        force = jnp.einsum('...,...q,qd->d',
+                           self.mask_solid.astype(delta_f.dtype), # Ensure mask is float
+                           delta_f,
+                           self.c)
 
-        # Project onto X and Y
-        # Sum over all directions and all solid pixels
-        fx = jnp.sum(f_solid * self.c[:, 0])
-        fy = jnp.sum(f_solid * self.c[:, 1])
-
-        return fx, fy
+        return force
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         f_init = self._get_equilibrium(jnp.ones((self.ny, self.nx, 1)), jnp.zeros((self.ny, self.nx, 2)))
@@ -383,14 +349,8 @@ class FluidicPinballCSDA(FluidicPinballCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.action_array: chex.Array = jnp.array(((0.0, 0.0),
-                                                   (-1.0, 0.0),
-                                                   (-1.0, -1.0),
-                                                   (0.0, -1.0),
-                                                   (1.0, 0.0),
-                                                   (1.0, 1.0),
-                                                   (0.0, 1.0),
-                                                   ))
+        values = jnp.array([-1, 0, 1])
+        self.action_array: chex.Array = jnp.array(jnp.meshgrid(values, values, values)).T.reshape(-1, 3)
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:

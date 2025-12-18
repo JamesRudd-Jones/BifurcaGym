@@ -24,7 +24,7 @@ env_names = [
              # "BickleyJetFlow-v0",
              # "DoubleGyreFlow-v0",
              #  "KS-v0",
-             #  "QuadrupleGyreFlow-v0",
+             # "QuadrupleGyreFlow-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
              "FluidicPinball-v0",
@@ -40,7 +40,7 @@ all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 
 class TestEnv:
     def setup_method(self):
-        self.num_steps = 200#0
+        self.num_steps = 100#0
         self.num_episodes = 100
         self.key = jrandom.key(42)
         self.error = 1e-4
