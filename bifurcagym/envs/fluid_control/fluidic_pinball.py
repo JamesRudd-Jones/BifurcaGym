@@ -69,7 +69,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         self.downsample_val = 20
 
         self.steps_per_env_step = 20
-        self.burn_in_steps = 20#00
+        self.burn_in_steps = 2000
 
         self.max_steps = 1000
 
@@ -139,10 +139,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         2. Outlet (Right) - Outflow
         3. Cylinders - Rotating Bounce-Back (The 'Action')
         """
-        # ---------------------------------------------------------
-        # 1. Cylinders: Moving bounce-back (vectorized)
-        # ---------------------------------------------------------
 
+        # Cylinder boune back steps
         # centres: (Ncyl, 2)
         # action:  (Ncyl,)
         cx = self.centres[:, 0][:, None, None]  # (Ncyl, 1, 1)
@@ -178,21 +176,11 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         f_new = jnp.where(cyl_mask_any[..., None], f_cyl, f)
 
-        # ---------------------------------------------------------
-        # 2. Inlet (Left boundary): Constant velocity
-        # ---------------------------------------------------------
-
         rho_inlet = 1.0
         u_inlet_vec = jnp.zeros((self.ny, 1, 2)).at[..., 0].set(self.u_inlet)
         feq_inlet = self._get_equilibrium(rho_inlet, u_inlet_vec)
-
-        f_new = f_new.at[:, 0, :].set(feq_inlet[:, 0, :])
-
-        # ---------------------------------------------------------
-        # 3. Outlet (Right boundary): Zero-gradient
-        # ---------------------------------------------------------
-
-        f_new = f_new.at[:, -1, :].set(f_new[:, -2, :])
+        f_new = f_new.at[:, 0, :].set(feq_inlet[:, 0, :])  # Inlet (Left boundary): Constant velocity
+        f_new = f_new.at[:, -1, :].set(f_new[:, -2, :])  # Outlet (Right boundary): Zero-gradient
 
         return f_new
 
