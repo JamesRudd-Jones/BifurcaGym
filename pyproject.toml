@@ -6,7 +6,7 @@ authors = [
     {name = "james_dell", email = "james.rudd.jones@gmail.com"},
 ]
 dependencies = [
-    "jax==0.6.0",
+    "jax[cuda]==0.6.0",
     "matplotlib>=3.10.3",
     "wandb>=0.21.0",
     "phiflow>=3.4.0",
@@ -31,13 +31,13 @@ build-backend = "pdm.backend"
  verify_ssl = true
  type = "find_links"
 
-                  [tool.pdm.scripts]
+                    [tool.pdm.scripts]
 test.cmd = "pytest -n auto --maxprocesses 8 --dist loadfile"
 # test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
 lint.shell = "ruff . && black --check ."
 fmt.shell = "ruff --fix . && black ."
 
-                  [tool.pdm.dev-dependencies]
+                    [tool.pdm.dev-dependencies]
 dev = [
     "flax>=0.10.6",
     "distrax>=0.1.5",

@@ -32,7 +32,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         self.nx = 300
         self.ny = 150
-        self.reynolds = 100.0  # Re < 15: Steady, Re ~ 100: Vortex Shedding, Re > 115: Chaotic
+        self.reynolds = 105.0  # Re < 15: Steady, Re ~ 100: Vortex Shedding, Re > 115: Chaotic
         self.tau = 0.6  # Relaxation time (related to viscosity)
 
         # D2Q9 constraints
@@ -45,8 +45,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         # Triangle formation
         self.centres = jnp.array(((self.nx // 4, self.ny // 2),  # Front cylinder
-                                  (3.5 * self.nx // 10, self.ny // 2 + 25),  # Top cylinder
-                                  (3.5 * self.nx // 10, self.ny // 2 - 25)  # Bottom cylinder
+                                  (4 * self.nx // 10, self.ny // 2 + 15),  # Top cylinder
+                                  (4 * self.nx // 10, self.ny // 2 - 15)  # Bottom cylinder
                                  ))
         self.radius = 10
 
