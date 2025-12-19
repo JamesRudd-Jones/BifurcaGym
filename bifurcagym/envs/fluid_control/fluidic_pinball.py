@@ -45,8 +45,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         # Triangle formation
         self.centres = jnp.array(((self.nx // 4, self.ny // 2),  # Front cylinder
-                                  (4 * self.nx // 10, self.ny // 2 + 25),  # Top cylinder
-                                  (4 * self.nx // 10, self.ny // 2 - 25)  # Bottom cylinder
+                                  (3.5 * self.nx // 10, self.ny // 2 + 25),  # Top cylinder
+                                  (3.5 * self.nx // 10, self.ny // 2 - 25)  # Bottom cylinder
                                  ))
         self.radius = 10
 
