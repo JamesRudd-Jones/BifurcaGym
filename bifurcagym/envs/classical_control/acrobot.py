@@ -142,7 +142,9 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         done_angle = -jnp.cos(state_tp1.joint_angle_1) - jnp.cos(state_tp1.joint_angle_2 + state_tp1.joint_angle_1) > 1.0
         reward = -1.0 * (1 - done_angle)
 
-        return reward, jnp.array(False)
+        time_done = jnp.array(state_tp1.time >= self.max_steps_in_episode)
+
+        return reward, time_done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:

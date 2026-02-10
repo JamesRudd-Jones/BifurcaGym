@@ -34,6 +34,8 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 
         self.max_control: float = 0.1
 
+        self.max_steps_in_episode: int = 300
+
         self.horizon: int = 200
 
     def step_env(self,
@@ -95,7 +97,9 @@ class HenonMapCSCA(base_env.BaseEnvironment):
                               jnp.array(True),
                               jnp.array(False))
 
-        return reward, done
+        fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_episode)
+
+        return reward, fin_done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:

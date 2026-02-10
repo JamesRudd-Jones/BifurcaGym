@@ -35,6 +35,8 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
 
         self.goal_state = jnp.array((1.8, 1.8))
 
+        self.max_steps_in_episode: int = 1000
+
     def step_env(self,
                  input_action: Union[jnp.int_, jnp.float_, chex.Array],
                  state: EnvState,
@@ -94,7 +96,9 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
         reward_adder = jax.lax.select(done, 10.0, 0.0)
         reward += reward_adder
 
-        return reward, done
+        fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_episode)
+
+        return reward, fin_done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:

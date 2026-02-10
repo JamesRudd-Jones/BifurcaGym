@@ -44,6 +44,8 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         self.horizon: int = 25
         self.dt: float = 0.1
 
+        self.max_steps_in_episode: int = 500
+
     def step_env(self,
                  input_action: Union[jnp.int_, jnp.float_, chex.Array],
                  state: EnvState,
@@ -137,17 +139,19 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         done1 = jnp.logical_or(state_tp1.x < -self.x_threshold,  # TODO state_t or state_tp1
                                state_tp1.x > self.x_threshold)
 
-        done2 = jnp.logical_or(state_tp1.theta < -self.theta_threshold,
-                               state_tp1.theta > self.theta_threshold,
-                               )
+        # done2 = jnp.logical_or(state_tp1.theta < -self.theta_threshold,
+        #                        state_tp1.theta > self.theta_threshold,
+        #                        )
         # TODO the above is for no swingup
 
-        # done2 = False
+        done2 = False
         # TODO the above is for swingup
 
         done = jnp.logical_or(done1, done2)
 
-        return -costs, done
+        fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_episode)
+
+        return -costs, fin_done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
