@@ -44,7 +44,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = acrobot.AcrobotCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State versions.")
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "CartPole-v0":
         if cont_state and cont_action:
@@ -52,7 +52,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = cartpole.CartPoleCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State versions.")
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "NCartPole-v0":
         if cont_state and cont_action:
@@ -60,7 +60,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = n_cartpole.NCartPoleCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State versions.")
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "Pendubot-v0":
         if cont_state and cont_action:
@@ -68,7 +68,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = acrobot.PendubotCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State versions.")
+            raise ValueError("No Discrete State version.")
 
     # TODO add in n pendulum here
 
@@ -78,7 +78,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = pendulum.PendulumCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State versions.")
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "WetChicken-v0":
         if cont_state and cont_action:
@@ -98,7 +98,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = bickley_jet_flow.BickleyJetFlowCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State or Discrete Action versions.")
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "DoubleGyreFlow-v0":
         if cont_state and cont_action:
@@ -106,13 +106,13 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = double_gyre_flow.DoubleGyreFlowCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State or Discrete Action versions.")
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "KS-v0":
         if cont_state and cont_action:
             env = kuramoto_sivashinsky.KuramotoSivashinskyCSCA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State or Discrete Action versions.")
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "QuadrupleGyreFlow-v0":
         if cont_state and cont_action:
@@ -120,7 +120,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = quadruple_gyre_flow.QuadrupleGyreFlowCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State or Discrete Action versions.")
+            raise ValueError("No Discrete State version.")
 
 
     # # # Discrete Time Chaos
@@ -163,7 +163,7 @@ def make(env_id: str,
         elif cont_state and not cont_action:
             env = fluidic_pinball.FluidicPinballCSDA(**env_kwargs)
         else:
-            raise ValueError("No Discrete State or Discrete Action versions.")
+            raise ValueError("No Discrete State version.")
 
 
     # # # Non-Stationary
