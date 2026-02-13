@@ -217,11 +217,11 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                                   1.0,
                                   1.0,
                                   self.max_vel_1,
-                                  self.max_vel_2], dtype=jnp.float32)
-        return spaces.Box(-high, high, (6,), jnp.float32)
+                                  self.max_vel_2], dtype=jnp.float64)
+        return spaces.Box(-high, high, (6,), jnp.float64)
 
     def reward_space(self) -> spaces.Box:
-        return spaces.Box(-1, 0, (()), dtype=jnp.float32)
+        return spaces.Box(-1, 0, (()), dtype=jnp.float64)
 
 
 class AcrobotCSCA(AcrobotCSDA):

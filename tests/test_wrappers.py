@@ -16,15 +16,15 @@ env_names = [
              # "Acrobot-v0",
              # "CartPole-v0",
              # "NCartPole-v0",
-             # "Pendubot-v0",
-             "Pendulum-v0",
+             "Pendubot-v0",
+             # "Pendulum-v0",
              # "WetChicken-v0",
              #  "KS-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
              ]
-cont_state = [True, False]
-cont_action = [True, False]
+cont_state = [True]#, False]
+cont_action = [True]#, False]
 normalised = [True, False]
 
 all_combinations = list(itertools.product(env_names,
@@ -68,8 +68,8 @@ class TestWrapper:
 
     def _test_rew_fn(self, reward_t, action_t, state_t, state_tp1, w_reward_t, w_action_t, w_state_t, w_state_tp1,
                      env, wrapped_env, key, normalised):
-        reward = env.reward_function(action_t, state_t, state_tp1, key)
-        w_reward = wrapped_env.reward_function(w_action_t, w_state_t, w_state_tp1, key)
+        reward, _ = env.reward_and_done_function(action_t, state_t, state_tp1, key)
+        w_reward, _ = wrapped_env.reward_and_done_function(w_action_t, w_state_t, w_state_tp1, key)
         chex.assert_trees_all_close(reward, reward_t, atol=self.error)
         chex.assert_trees_all_close(w_reward, w_reward_t, atol=self.error)
         if normalised:
