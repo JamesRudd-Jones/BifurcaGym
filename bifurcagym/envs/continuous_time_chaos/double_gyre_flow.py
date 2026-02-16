@@ -56,8 +56,11 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
+        obs_tp1 = self.get_obs(new_state)
+        obs = self.get_obs(state)
+
+        return (jax.lax.stop_gradient(obs_tp1),
+                jax.lax.stop_gradient(obs_tp1 - obs),
                 jax.lax.stop_gradient(new_state),
                 reward,
                 done,
@@ -76,7 +79,7 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
         return u_flow, v_flow
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        key, _key = jrandom.split(key)
+        # key, _key = jrandom.split(key)
         state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), time=0)
 
         return self.get_obs(state), state
@@ -92,9 +95,7 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
 
         reward = jnp.array(-0.01)  # Time penalty
         # TODO a goal based reward or some distance metric?
-
-        reward_adder = jax.lax.select(done, 10.0, 0.0)
-        reward += reward_adder
+        reward += jax.lax.select(done, 10.0, 0.0)
 
         fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_episode)
 

@@ -2,8 +2,7 @@
 An env ported to Jax based off of the following work:
 https://royalsocietypublishing.org/doi/full/10.1098/rspa.2019.0351
 """
-
-
+import os
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -12,6 +11,7 @@ from bifurcagym import spaces
 from flax import struct
 from typing import Any, Dict, Tuple, Union
 import chex
+from pathlib import Path
 
 
 @struct.dataclass
@@ -25,8 +25,11 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.x: jnp.ndarray = jnp.array(np.loadtxt("../bifurcagym/envs/continuous_time_chaos/ks_files/x.dat"))  # select space discretization of the target solution
-        self.U_bf: jnp.ndarray = jnp.array(np.loadtxt('../bifurcagym/envs/continuous_time_chaos/ks_files/u2.dat'))  # select u1, u2 or u3 as target solution
+        here = Path(__file__).resolve().parent
+        self.data_dir = here / "ks_files"
+
+        self.x: jnp.ndarray = jnp.array(np.loadtxt(self.data_dir / "x.dat"))  # select space discretisation of the target solution
+        self.U_bf: jnp.ndarray = jnp.array(np.loadtxt(self.data_dir / 'u2.dat'))  # select u1, u2 or u3 as target solution
         N = self.x.size
 
         self.state_dim: int = 8
@@ -39,7 +42,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         self.max_control: float = 0.1
 
-        self.horizon: int = 200
+        self.max_steps_in_episode: int = 500
         self.dt: float = 0.05
 
         sig = 0.4
@@ -63,8 +66,10 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                  state: EnvState,
                  key: chex.PRNGKey,
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
+        action = self.action_convert(input_action)
+
         # forcing shape
-        dum_SA = self.B_SA * input_action.T  # TODO check this transpose
+        dum_SA = self.B_SA * action.T  # TODO check this transpose
         f0_S = jnp.sum(dum_SA, axis=-1)
 
         # semi-implicit third-order runge kutta update.
@@ -103,7 +108,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         return -0.5 * self.ik_K * jnp.fft.rfft(ur ** 2, axis=-1) + f
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        u_S = jnp.array(np.loadtxt('../bifurcagym/envs/continuous_time_chaos/ks_files/u3.dat'))
+        u_S = jnp.array(np.loadtxt(self.data_dir / 'u3.dat'))
         state = EnvState(u=u_S, time=0)
 
         return self.get_obs(state), state
@@ -116,7 +121,13 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                         ) -> Tuple[chex.Array, chex.Array]:
         reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
 
-        return reward, jnp.array(False)
+        done = state_tp1.time >= self.max_steps_in_episode
+
+        return reward, jnp.array(done)
+
+    def action_convert(self,
+                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        return jnp.clip(action, -self.max_control, self.max_control)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None):
         return state.u[5::self.x_S.shape[0] // self.state_dim]
@@ -198,3 +209,23 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
     def observation_space(self) -> spaces.Box:
         high = 10  # TODO unsure of actual size should check
         return spaces.Box(-high, high, (self.state_dim,), dtype=jnp.float64)
+
+
+class KuramotoSivashinskyCSDA(KuramotoSivashinskyCSCA):
+    def __init__(self, **env_kwargs):
+        super().__init__(**env_kwargs)
+
+        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
+
+        idx = jnp.arange(self.action_array.shape[0] ** self.action_dim)
+        powers = self.action_array.shape[0] ** jnp.arange(self.action_dim)
+        digits = (idx[:, None] // powers[None, :]) % self.action_array.shape[0]
+        self.action_perms: jnp.ndarray = self.action_array[digits]
+        # TODO this does not scale very nicely
+
+    def action_convert(self,
+                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+        return self.action_perms[action.squeeze()] * self.max_control
+
+    def action_space(self) -> spaces.Discrete:
+        return spaces.Discrete(len(self.action_perms))

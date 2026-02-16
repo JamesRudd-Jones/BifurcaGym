@@ -4,7 +4,8 @@ from bifurcagym.envs.classical_control import (acrobot,
                                                pendulum,
                                                wet_chicken)
 
-from bifurcagym.envs.continuous_time_chaos import (bickley_jet_flow,
+from bifurcagym.envs.continuous_time_chaos import (arnold_beltrami_childress_flow,
+                                                   bickley_jet_flow,
                                                    double_gyre_flow,
                                                    kuramoto_sivashinsky,
                                                    quadruple_gyre_flow,)
@@ -92,6 +93,14 @@ def make(env_id: str,
 
     # # # Continuous Time Chaos
     ####################################################################################################################
+    elif env_id == "ABCFlow-v0":
+        if cont_state and cont_action:
+            env = arnold_beltrami_childress_flow.ABCFlowCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = arnold_beltrami_childress_flow.ABCFlowCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
     elif env_id == "BickleyJetFlow-v0":
         if cont_state and cont_action:
             env = bickley_jet_flow.BickleyJetFlowCSCA(**env_kwargs)
@@ -111,6 +120,8 @@ def make(env_id: str,
     elif env_id == "KS-v0":
         if cont_state and cont_action:
             env = kuramoto_sivashinsky.KuramotoSivashinskyCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = kuramoto_sivashinsky.KuramotoSivashinskyCSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State version.")
 
@@ -213,6 +224,7 @@ registered_envs = ["Acrobot-v0",
                    "Pendubot-v0",
                    "Pendulum-v0",
                    "WetChicken-v0",
+                   "ABCFlow-v0",
                    "BickleyJetFlow-v0",
                    "DoubleGyreFlow-v0",
                    "KS-v0",

@@ -1,4 +1,5 @@
-from bifurcagym.envs.continuous_time_chaos import (bickley_jet_flow,
+from bifurcagym.envs.continuous_time_chaos import (arnold_beltrami_childress_flow,
+                                                   bickley_jet_flow,
                                                    double_gyre_flow,
                                                    kuramoto_sivashinsky,
                                                    lorenz63,

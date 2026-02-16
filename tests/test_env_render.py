@@ -18,16 +18,17 @@ env_names = [
              # "Acrobot-v0",
              # "CartPole-v0",
              # "NCartPole-v0",
-             # "Pendubot-v0",
+             "Pendubot-v0",
              # "Pendulum-v0",
              # "WetChicken-v0",
+             # "ABCFlow-v0",
              # "BickleyJetFlow-v0",
              # "DoubleGyreFlow-v0",
              #  "KS-v0",
              # "QuadrupleGyreFlow-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
-             "FluidicPinball-v0",
+             # "FluidicPinball-v0",
              # "BoatInCurrent-v0",
              ]
 cont_state = [True]#, False]
@@ -58,10 +59,10 @@ class TestEnv:
             def _loop_func(runner_state, unused):
                 obs, env_state, key = runner_state
                 key, _key = jrandom.split(key)
-                # action = env.action_space().sample(_key)
+                action = env.action_space().sample(_key)
                 # action = jnp.sin(0.5 * env_state.time) * 0.1 * jnp.cos(env_state.time)
-                action = jnp.ones(1,) * env.action_space().high
-                action = jnp.zeros(env.action_space().shape[0])
+                # action = jnp.ones(1,) * env.action_space().high
+                # action = jnp.zeros(env.action_space().shape[0])
                 key, _key = jrandom.split(key)
                 nobs, delta_obs, next_env_state, rew, done, info = env.step(action, env_state, _key)
 

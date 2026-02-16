@@ -16,53 +16,50 @@ import matplotlib.pyplot as plt
 
 num_steps = 50#0#0
 num_episodes = 1#00
-key = jrandom.PRNGKey(42)
+key = jrandom.key(42)
 error = 1e-4
-env_name = "Pendulum-v0"
+env_name = "KS-v0"
 
-def test_step(env_name, cont_state, cont_action, normalised, delta_obs, autoreset, key):
+def test_step(env_name, cont_state, cont_action, normalised, autoreset, metrics, key):
     key, _ = jrandom.split(key)
     env = bifurcagym.make(env_name,
                           cont_state=cont_state,
                           cont_action=cont_action,
                           normalised=normalised,
-                          delta_obs=delta_obs,
-                          autoreset=autoreset, )
+                          autoreset=autoreset,
+                          metrics=metrics)
 
     def scan_step(carry, _):
         state, key = carry
         key, _key = jrandom.split(key)
         action = env.action_space().sample(_key)
         key, _key = jrandom.split(key)
-        obs, next_state, reward, done, info = env.step(action, state, _key)
-        return (next_state, key), (state, obs)
+        obs, delta_obs, next_state, reward, done, info = env.step(action, state, _key)
+        return (next_state, key), (state, obs, delta_obs)
 
     for _ in range(num_episodes):
         key, _key = jrandom.split(key)
         init_obs, states = env.reset(_key)
-        (final_state, _), (state, obs) = jax.lax.scan(scan_step, (states, key), None, num_steps)
+        (final_state, _), (state, obs, delta_obs) = jax.lax.scan(scan_step, (states, key), None, num_steps)
 
     total_state = jax.tree.map(lambda x, y: jnp.concatenate((x, jnp.expand_dims(y, axis=0))), state, final_state)
 
-    if delta_obs:
-        def reconstruct_observations(initial_obs, delta_obs_trajectory):
-            def scan_fn(carry, delta_obs):
-                next_obs = carry + delta_obs
-                return next_obs, next_obs
-
-            # Initialize the carry with the initial observation
-            initial_carry = initial_obs
-
-            # Perform the scan
-            _, reconstructed_obs_tail = jax.lax.scan(scan_fn, initial_carry, delta_obs_trajectory)
-
-            # Prepend the initial observation to the result
-            reconstructed_obs = jnp.concatenate([initial_obs[None, ...], reconstructed_obs_tail], axis=0)
-            return reconstructed_obs
-
-        total_obs = reconstruct_observations(init_obs, obs)
-    else:
-        total_obs = jnp.concatenate((jnp.expand_dims(init_obs, axis=0), obs), axis=0)
+    # def reconstruct_observations(initial_obs, delta_obs_trajectory):
+    #     def scan_fn(carry, delta_obs):
+    #         next_obs = carry + delta_obs
+    #         return next_obs, next_obs
+    #
+    #     # Initialize the carry with the initial observation
+    #     initial_carry = initial_obs
+    #
+    #     # Perform the scan
+    #     _, reconstructed_obs_tail = jax.lax.scan(scan_fn, initial_carry, delta_obs_trajectory)
+    #
+    #     # Prepend the initial observation to the result
+    #     reconstructed_obs = jnp.concatenate([initial_obs[None, ...], reconstructed_obs_tail], axis=0)
+    #     return reconstructed_obs
+    #
+    # total_obs = reconstruct_observations(init_obs, obs)
 
     env.render_traj(total_state)
     plt.scatter(total_obs[:, 0], total_obs[:, 1])
@@ -73,10 +70,10 @@ def test_step(env_name, cont_state, cont_action, normalised, delta_obs, autorese
 
 test_step(env_name,
           cont_state=True,
-          cont_action=True,
+          cont_action=False,
           normalised=False,
-          delta_obs=True,
           autoreset=True,
+          metrics=False,
           key=key)
 
     # def test_generative_step(self, env_name, cont_state, cont_action):

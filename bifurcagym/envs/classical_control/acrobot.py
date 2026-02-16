@@ -78,7 +78,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                              joint_angle_2=joint_angle_2,
                              vel_1=vel_1,
                              vel_2=vel_2,
-                             time=jnp.int32(state.time + 1),
+                             time=state.time+1,
                              )
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, key)
@@ -134,11 +134,11 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         return self.get_obs(state), state
 
     def reward_and_done_function(self,
-                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
-                        state_t: EnvState,
-                        state_tp1: EnvState,
-                        key: chex.PRNGKey = None,
-                        )-> Tuple[chex.Array, chex.Array]:
+                                 input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
+                                 state_t: EnvState,
+                                 state_tp1: EnvState,
+                                 key: chex.PRNGKey = None,
+                                 )-> Tuple[chex.Array, chex.Array]:
         done_angle = -jnp.cos(state_tp1.joint_angle_1) - jnp.cos(state_tp1.joint_angle_2 + state_tp1.joint_angle_1) > 1.0
         reward = -1.0 * (1 - done_angle)
 
