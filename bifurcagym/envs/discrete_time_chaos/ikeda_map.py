@@ -28,12 +28,12 @@ class IkedaMapCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.u_param: float = 0.918
+        self.u_param: float = 0.9#18
         self.k: float = 0.4
         self.p: float = 6.0
 
-        self.fixed_point: jnp.ndarray = jnp.array((1.055,
-                                                   -0.055))
+        self.fixed_point: jnp.ndarray = jnp.array((0.532754622941,
+                                                   0.246896772711))
 
         self.max_control: float = 0.05  # perturbation to u_param
         self.u_min: float = 0.0
@@ -99,7 +99,7 @@ class IkedaMapCSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
-        reward = -jnp.sum(err * err)
+        reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
 
         state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_episode

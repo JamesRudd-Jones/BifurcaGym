@@ -35,10 +35,10 @@ class RosslerCSCA(base_env.BaseEnvironment):
         self.dt: float = 0.02
         self.substeps: int = 5
 
-        self.max_control: float = 1.0  # c perturbation bound
+        self.max_control: jnp.ndarray = jnp.array((0.01, 0.01, 1.0))
         self.num_actions = 3
 
-        self.max_steps_in_episode: int = int(500 // self.dt)
+        self.max_steps_in_episode: int = int(200 // self.dt)
         self.reward_ball: float = 1e-2
 
         self.start_point = jnp.array([0.1, 0.0, 0.0], dtype=jnp.float64)
@@ -94,6 +94,8 @@ class RosslerCSCA(base_env.BaseEnvironment):
         dx = -Y - Z
         dy = X + (self.a + u[0]) * Y
         dz = (self.b + u[1]) + Z * (X - (self.c + u[2]))
+        # dy = X + self.a * Y
+        # dz = self.b + Z * (X - (self.c + u[0]))
         return jnp.array([dx, dy, dz], dtype=jnp.float64)
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:

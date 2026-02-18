@@ -107,7 +107,7 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
-        reward = -jnp.sum(err * err)
+        reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
 
         state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_episode

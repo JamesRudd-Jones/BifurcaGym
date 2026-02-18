@@ -38,7 +38,7 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
         self.max_control: float = 2.0  # 5.0  # rho perturbation bound
         self.num_actions: int = 3
 
-        self.max_steps_in_episode: int = int(500 // self.dt)
+        self.max_steps_in_episode: int = int(200 // self.dt)
         self.reward_ball: float = 1e-2
 
         self.start_point = jnp.array([1.0, 1.0, 1.0], dtype=jnp.float64)
