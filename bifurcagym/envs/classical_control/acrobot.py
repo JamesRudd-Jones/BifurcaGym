@@ -43,9 +43,9 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         self.max_torque: float = 1.0
         self.torque_noise_max: float = 0.0
 
-        self.max_steps_in_episode: int = 500
-
         self.dt: float = 0.2
+
+        self.max_steps_in_episode: int = int(500 // self.dt)
 
     def step_env(self,
                  input_action: Union[int, float, chex.Array],

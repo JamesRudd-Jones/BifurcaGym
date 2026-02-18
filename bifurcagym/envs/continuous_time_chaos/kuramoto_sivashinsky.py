@@ -44,8 +44,8 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         self.max_control: float = 0.1
 
-        self.max_steps_in_episode: int = 500
         self.dt: float = 0.05
+        self.max_steps_in_episode: int = int(500 // self.dt)
 
         sig = 0.4
         x_zero_A = self.x_S[-1] / self.action_dim * jnp.arange(0, self.action_dim)

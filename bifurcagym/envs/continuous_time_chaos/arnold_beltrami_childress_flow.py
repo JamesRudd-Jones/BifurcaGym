@@ -51,7 +51,7 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
         self.goal_state = jnp.array((1.7, 4.2, 2.9))  # any point in [0, 2π)^3
         self.goal_radius = 0.25
 
-        self.max_steps_in_episode: int = 2000
+        self.max_steps_in_episode: int = int(500 // self.dt)
 
     def step_env(self,
                 input_action: Union[jnp.int_, jnp.float_, chex.Array],
