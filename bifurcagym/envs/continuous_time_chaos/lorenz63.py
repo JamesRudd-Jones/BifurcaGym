@@ -35,7 +35,8 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
         self.dt: float = 0.01
         self.substeps: int = 5
 
-        self.max_control: float = 5.0  # rho perturbation bound
+        self.max_control: float = 2.0  # 5.0  # rho perturbation bound
+        self.num_actions: int = 3
 
         self.max_steps_in_episode: int = int(500 // self.dt)
         self.reward_ball: float = 1e-2
@@ -72,12 +73,10 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                 {})
 
     def _f(self, x: chex.Array, u: chex.Array) -> chex.Array:
-        sigma, beta = self.sigma, self.beta
-        rho_eff = self.rho + u  # control perturbs rho
         X, Y, Z = x[0], x[1], x[2]
-        dx = sigma * (Y - X)
-        dy = X * (rho_eff - Z) - Y
-        dz = X * Y - beta * Z
+        dx = (self.sigma + u[0]) * (Y - X)
+        dy = X * ((self.rho + u[1]) - Z) - Y
+        dz = X * Y - (self.beta + u[2]) * Z
         return jnp.array([dx, dy, dz], dtype=jnp.float64)
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -119,7 +118,7 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
         return "Lorenz63-v0"
 
     def action_space(self) -> spaces.Box:
-        return spaces.Box(-self.max_control, self.max_control, shape=(1,), dtype=jnp.float64)
+        return spaces.Box(-self.max_control, self.max_control, shape=(self.num_actions,), dtype=jnp.float64)
 
     def observation_space(self) -> spaces.Box:
         # Lorenz is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
@@ -132,9 +131,15 @@ class Lorenz63CSDA(Lorenz63CSCA):
 
         self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
 
+        idx = jnp.arange(self.action_array.shape[0] ** self.num_actions)
+        powers = self.action_array.shape[0] ** jnp.arange(self.num_actions)
+        digits = (idx[:, None] // powers[None, :]) % self.action_array.shape[0]
+        self.action_perms: jnp.ndarray = self.action_array[digits]
+        # TODO should I add the following to utils to standardise it?
+
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action.squeeze()] * self.max_control
+        return self.action_perms[action.squeeze()] * self.max_control
 
     def action_space(self) -> spaces.Discrete:
-        return spaces.Discrete(len(self.action_array))
+        return spaces.Discrete(len(self.action_perms))

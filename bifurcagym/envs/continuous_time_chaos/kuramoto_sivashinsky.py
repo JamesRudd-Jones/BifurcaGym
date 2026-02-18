@@ -230,6 +230,7 @@ class KuramotoSivashinskyCSDA(KuramotoSivashinskyCSCA):
         digits = (idx[:, None] // powers[None, :]) % self.action_array.shape[0]
         self.action_perms: jnp.ndarray = self.action_array[digits]
         # TODO this does not scale very nicely
+        # TODO should I add the following to utils to standardise it? if it is okay to use
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
