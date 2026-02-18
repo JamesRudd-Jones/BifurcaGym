@@ -91,7 +91,7 @@ class HenonMapCSCA(base_env.BaseEnvironment):
         # boundary_done_x = jnp.logical_or(state_tp1.x <= -10, state_tp1.x >= 10)
         # boundary_done_y = jnp.logical_or(state_tp1.y <= -10, state_tp1.y >= 10)
         # boundary_done = jnp.logical_or(boundary_done_x, boundary_done_y)
-        boundary_done = jnp.linalg.norm(state_tp1.x) > 1e3
+        boundary_done = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y))) > 1e3
         goal_done = jnp.linalg.norm(err) < self.reward_ball
 
         done = jnp.logical_or(jnp.logical_or(boundary_done, goal_done), state_tp1.time >= self.max_steps_in_episode)

@@ -112,7 +112,7 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
         state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_episode
 
-        diverged = jnp.linalg.norm(state_tp1.x) > 1e3
+        diverged = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y))) > 1e3
 
         done = jnp.logical_or(jnp.logical_or(state_done, time_done), diverged)
 
