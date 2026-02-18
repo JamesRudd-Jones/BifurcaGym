@@ -32,6 +32,8 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         self.U_bf: jnp.ndarray = jnp.array(np.loadtxt(self.data_dir / 'u2.dat'))  # select u1, u2 or u3 as target solution
         N = self.x.size
 
+        self.reward_ball: float = 0.01
+
         self.state_dim: int = 8
         self.action_dim: int = 4
         self.L: int = 22
@@ -121,9 +123,15 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                         ) -> Tuple[chex.Array, chex.Array]:
         reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
 
-        done = state_tp1.time >= self.max_steps_in_episode
+        state_done = jax.lax.select(jnp.linalg.norm(state_tp1.u - self.U_bf) < self.reward_ball,
+                                    jnp.array(True),
+                                    jnp.array(False))
+        time_done = jax.lax.select(state_tp1.time >= self.max_steps_in_episode,
+                                   jnp.array(True),
+                                   jnp.array(False))
+        done = jnp.logical_or(state_done, time_done)
 
-        return reward, jnp.array(done)
+        return reward, done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
