@@ -95,13 +95,13 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
         return u, v, w
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        # state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), z=jnp.array(0.2), time=0)
+        state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), z=jnp.array(0.2), time=0)
 
-        key_x, key_y, key_z = jrandom.split(key, 3)
-        state = EnvState(x=jrandom.uniform(key_x, (), minval=self.x_bounds[0], maxval=self.x_bounds[1]),
-                         y=jrandom.uniform(key_y, (), minval=self.y_bounds[0], maxval=self.y_bounds[1]),
-                         z=jrandom.uniform(key_z, (), minval=self.z_bounds[0], maxval=self.z_bounds[1]),
-                         time=0)
+        # key_x, key_y, key_z = jrandom.split(key, 3)
+        # state = EnvState(x=jrandom.uniform(key_x, (), minval=self.x_bounds[0], maxval=self.x_bounds[1]),
+        #                  y=jrandom.uniform(key_y, (), minval=self.y_bounds[0], maxval=self.y_bounds[1]),
+        #                  z=jrandom.uniform(key_z, (), minval=self.z_bounds[0], maxval=self.z_bounds[1]),
+        #                  time=0)
 
         return self.get_obs(state), state
 
