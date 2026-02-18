@@ -8,6 +8,9 @@ from typing import Any, Dict, Tuple, Union
 import chex
 
 
+# TODO need to finish and make it work
+
+
 @struct.dataclass
 class EnvState(base_env.EnvState):
     x: jnp.ndarray

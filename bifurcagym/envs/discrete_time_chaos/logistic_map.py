@@ -87,11 +87,11 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         return self.get_obs(state), state
 
     def reward_and_done_function(self,
-                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
-                        state_t: EnvState,
-                        state_tp1: EnvState,
-                        key: chex.PRNGKey = None,
-                        ) -> Tuple[chex.Array, chex.Array]:
+                                 input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
+                                 state_t: EnvState,
+                                 state_tp1: EnvState,
+                                 key: chex.PRNGKey = None,
+                                 ) -> Tuple[chex.Array, chex.Array]:
         """
         As per the paper titled: Optimal chaos control through reinforcement learning
         "https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement"
@@ -100,13 +100,7 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         # The above can set more specific norm distances
 
         # TODO state_t or state_tp1
-        state_done = jax.lax.select(jnp.abs(state_tp1.x - self.fixed_point) < self.reward_ball,
-                                    jnp.array(True),
-                                    jnp.array(False))
-        time_done = jax.lax.select(state_tp1.time >= self.max_steps_in_episode,
-                                   jnp.array(True),
-                                   jnp.array(False))
-        done = jnp.logical_or(state_done, time_done)
+        done = jnp.logical_or(jnp.abs(state_tp1.x - self.fixed_point) < self.reward_ball, state_tp1.time >= self.max_steps_in_episode)
 
         return reward, done
 

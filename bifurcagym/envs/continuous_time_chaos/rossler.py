@@ -11,43 +11,60 @@ from bifurcagym.envs import utils
 
 @struct.dataclass
 class EnvState(base_env.EnvState):
-    x: jnp.ndarray
+    x: jnp.ndarray  # shape (3,)
     time: int
 
 
-class Lorenz63CSCA(base_env.BaseEnvironment):
+class RosslerCSCA(base_env.BaseEnvironment):
     """
-    Lorenz system:
-      x' = sigma (y - x)
-      y' = x (rho - z) - y
-      z' = x y - beta z
+    Rössler system:
+      x' = -y - z
+      y' = x + a y
+      z' = b + z (x - c)
 
-    Control u perturbs rho: rho_eff = rho + u (clipped).
+    Control u perturbs c: c_eff = c + u (clipped).
     """
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.sigma: float = 10.0
-        self.rho: float = 28.0
-        self.beta: float = 8.0 / 3.0
+        self.a: float = 0.2
+        self.b: float = 0.2
+        self.c: float = 5.7
 
-        self.dt: float = 0.01
+        self.dt: float = 0.02
         self.substeps: int = 5
 
-        self.max_control: float = 5.0  # rho perturbation bound
+        self.max_control: float = 1.0  # c perturbation bound
 
         self.max_steps_in_episode: int = int(500 // self.dt)
         self.reward_ball: float = 1e-2
 
-        self.start_point = jnp.array([1.0, 1.0, 1.0], dtype=jnp.float64)
+        self.start_point = jnp.array([0.1, 0.0, 0.0], dtype=jnp.float64)
         self.random_start: bool = False  # TODO turn it into an env kwargs
-        self.random_start_low = jnp.array([-10.0, -10.0, 0.0], dtype=jnp.float64)
-        self.random_start_high = jnp.array([10.0, 10.0, 30.0], dtype=jnp.float64)
-
-        self.fixed_point = jnp.array([0.0, 0.0, 0.0], dtype=jnp.float64)
+        self.random_start_low = jnp.array([-5.0, -5.0, 0.0], dtype=jnp.float64)
+        self.random_start_high = jnp.array([5.0, 5.0, 10.0], dtype=jnp.float64)
 
         self.horizon: int = 200
+
+    @property
+    def fixed_point(self) -> chex.Array:
+        """
+        Equilibria solve:
+          -y - z = 0  => y = -z
+          x + a y = 0 => x = -a y = a z
+          b + z(x - c) = 0 => b + z(a z - c) = 0 => a z^2 - c z + b = 0
+
+        Choose the "+" root (often the one relevant in chaos-control demos), but you can swap if desired.
+        """
+        a, b, c = self.a, self.b, self.c
+        disc = c * c - 4.0 * a * b
+        # guard against numerical negatives
+        disc = jnp.maximum(disc, 0.0)
+        z = (c + jnp.sqrt(disc)) / (2.0 * a)
+        x = a * z
+        y = -z
+        return jnp.array([x, y, z], dtype=jnp.float64)
 
     def step_env(self,
                  input_action: Union[jnp.int_, jnp.float_, chex.Array],
@@ -72,12 +89,12 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                 {})
 
     def _f(self, x: chex.Array, u: chex.Array) -> chex.Array:
-        sigma, beta = self.sigma, self.beta
-        rho_eff = self.rho + u  # control perturbs rho
+        a, b = self.a, self.b
+        c_eff = self.c + u
         X, Y, Z = x[0], x[1], x[2]
-        dx = sigma * (Y - X)
-        dy = X * (rho_eff - Z) - Y
-        dz = X * Y - beta * Z
+        dx = -Y - Z
+        dy = X + a * Y
+        dz = b + Z * (X - c_eff)
         return jnp.array([dx, dy, dz], dtype=jnp.float64)
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -116,17 +133,17 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
 
     @property
     def name(self) -> str:
-        return "Lorenz63-v0"
+        return "Rossler-v0"
 
     def action_space(self) -> spaces.Box:
         return spaces.Box(-self.max_control, self.max_control, shape=(1,), dtype=jnp.float64)
 
     def observation_space(self) -> spaces.Box:
-        # Lorenz is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
+        # Rossler is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
         return spaces.Box(-1e6, 1e6, shape=(3,), dtype=jnp.float64)
 
 
-class Lorenz63CSDA(Lorenz63CSCA):
+class RosslerCSDA(RosslerCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 

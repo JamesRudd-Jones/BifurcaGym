@@ -11,39 +11,44 @@ from bifurcagym.envs import utils
 
 @struct.dataclass
 class EnvState(base_env.EnvState):
-    x: jnp.ndarray
+    x: jnp.ndarray  # shape (3,)
     time: int
 
 
-class Lorenz63CSCA(base_env.BaseEnvironment):
+class ChuaCSCA(base_env.BaseEnvironment):
     """
-    Lorenz system:
-      x' = sigma (y - x)
-      y' = x (rho - z) - y
-      z' = x y - beta z
+    One common dimensionless Chua form:
+      x' = alpha (y - x - f(x))
+      y' = x - y + z
+      z' = -beta y
 
-    Control u perturbs rho: rho_eff = rho + u (clipped).
+    with piecewise-linear nonlinearity:
+      f(x) = m1*x + 0.5*(m0 - m1)*(|x+1| - |x-1|)
+
+    Control u perturbs alpha: alpha_eff = alpha + u (clipped).
     """
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.sigma: float = 10.0
-        self.rho: float = 28.0
-        self.beta: float = 8.0 / 3.0
+        # typical double-scroll-ish set (dimensionless)
+        self.alpha: float = 15.6
+        self.beta: float = 28.0
+        self.m0: float = -1.143
+        self.m1: float = -0.714
 
         self.dt: float = 0.01
         self.substeps: int = 5
 
-        self.max_control: float = 5.0  # rho perturbation bound
+        self.max_control: float = 5.0  # alpha perturbation bound
 
         self.max_steps_in_episode: int = int(500 // self.dt)
         self.reward_ball: float = 1e-2
 
-        self.start_point = jnp.array([1.0, 1.0, 1.0], dtype=jnp.float64)
-        self.random_start: bool = False  # TODO turn it into an env kwargs
-        self.random_start_low = jnp.array([-10.0, -10.0, 0.0], dtype=jnp.float64)
-        self.random_start_high = jnp.array([10.0, 10.0, 30.0], dtype=jnp.float64)
+        self.start_point = jnp.array([0.1, 0.0, 0.0], dtype=jnp.float64)
+        self.random_start: bool = True  # TODO turn it into an env kwargs
+        self.random_start_low = jnp.array([-2.0, -2.0, -2.0], dtype=jnp.float64)
+        self.random_start_high = jnp.array([2.0, 2.0, 2.0], dtype=jnp.float64)
 
         self.fixed_point = jnp.array([0.0, 0.0, 0.0], dtype=jnp.float64)
 
@@ -71,13 +76,19 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                 done,
                 {})
 
+    def _f_nl(self, x: chex.Array) -> chex.Array:
+        """Chua piecewise-linear diode characteristic f(x)."""
+        m0, m1 = self.m0, self.m1
+        return m1 * x + 0.5 * (m0 - m1) * (jnp.abs(x + 1.0) - jnp.abs(x - 1.0))
+
     def _f(self, x: chex.Array, u: chex.Array) -> chex.Array:
-        sigma, beta = self.sigma, self.beta
-        rho_eff = self.rho + u  # control perturbs rho
+        alpha_eff = self.alpha + u
+        beta = self.beta
         X, Y, Z = x[0], x[1], x[2]
-        dx = sigma * (Y - X)
-        dy = X * (rho_eff - Z) - Y
-        dz = X * Y - beta * Z
+        fx = self._f_nl(X)
+        dx = alpha_eff * (Y - X - fx)
+        dy = X - Y + Z
+        dz = -beta * Y
         return jnp.array([dx, dy, dz], dtype=jnp.float64)
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -116,17 +127,17 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
 
     @property
     def name(self) -> str:
-        return "Lorenz63-v0"
+        return "Chua-v0"
 
     def action_space(self) -> spaces.Box:
         return spaces.Box(-self.max_control, self.max_control, shape=(1,), dtype=jnp.float64)
 
     def observation_space(self) -> spaces.Box:
-        # Lorenz is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
+        # Rossler is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
         return spaces.Box(-1e6, 1e6, shape=(3,), dtype=jnp.float64)
 
 
-class Lorenz63CSDA(Lorenz63CSCA):
+class ChuaCSDA(ChuaCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 

@@ -6,13 +6,19 @@ from bifurcagym.envs.classical_control import (acrobot,
 
 from bifurcagym.envs.continuous_time_chaos import (arnold_beltrami_childress_flow,
                                                    bickley_jet_flow,
+                                                   chua,
                                                    double_gyre_flow,
                                                    kuramoto_sivashinsky,
-                                                   quadruple_gyre_flow,)
+                                                   lorenz63,
+                                                   quadruple_gyre_flow,
+                                                   rossler,
+                                                   )
 
-from bifurcagym.envs.discrete_time_chaos import (logistic_map,
-                                                 henon_map,
+from bifurcagym.envs.discrete_time_chaos import (henon_map,
+                                                 ikeda_map,
+                                                 logistic_map,
                                                  tent_map,
+                                                 tinkerbell_map,
                                                  )
 from bifurcagym.envs.fluid_control import (fluidic_pinball,
                                            )
@@ -109,6 +115,14 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
+    elif env_id == "Chua-v0":
+        if cont_state and cont_action:
+            env = chua.ChuaCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = chua.ChuaCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
     elif env_id == "DoubleGyreFlow-v0":
         if cont_state and cont_action:
             env = double_gyre_flow.DoubleGyreFlowCSCA(**env_kwargs)
@@ -125,6 +139,14 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
+    elif env_id == "Lorenz63-v0":
+        if cont_state and cont_action:
+            env = lorenz63.Lorenz63CSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = lorenz63.Lorenz63CSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
     elif env_id == "QuadrupleGyreFlow-v0":
         if cont_state and cont_action:
             env = quadruple_gyre_flow.QuadrupleGyreFlowCSCA(**env_kwargs)
@@ -133,19 +155,17 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
+    elif env_id == "Rossler-v0":
+        if cont_state and cont_action:
+            env = rossler.RosslerCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = rossler.RosslerCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
 
     # # # Discrete Time Chaos
     ####################################################################################################################
-    elif env_id == "LogisticMap-v0":
-        if cont_state and cont_action:
-            env = logistic_map.LogisticMapCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = logistic_map.LogisticMapCSDA(**env_kwargs)
-        elif not cont_state and not cont_action:
-            env = logistic_map.LogisticMapDSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State Continuous Action version.")
-
     elif env_id == "HenonMap-v0":
         if cont_state and cont_action:
             env = henon_map.HenonMapCSCA(**env_kwargs)
@@ -153,6 +173,24 @@ def make(env_id: str,
             env = henon_map.HenonMapCSDA(**env_kwargs)
         elif not cont_state and not cont_action:
             env = henon_map.HenonMapDSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State Continuous Action version.")
+
+    elif env_id == "IkedaMap-v0":
+        if cont_state and cont_action:
+            env = ikeda_map.IkedaMapCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = ikeda_map.IkedaMapCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
+    elif env_id == "LogisticMap-v0":
+        if cont_state and cont_action:
+            env = logistic_map.LogisticMapCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = logistic_map.LogisticMapCSDA(**env_kwargs)
+        elif not cont_state and not cont_action:
+            env = logistic_map.LogisticMapDSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State Continuous Action version.")
 
@@ -165,6 +203,14 @@ def make(env_id: str,
             env = tent_map.TentMapDSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State Continuous Action version.")
+
+    elif env_id == "TinkerbellMap-v0":
+        if cont_state and cont_action:
+            env = tinkerbell_map.TinkerbellMapCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = tinkerbell_map.TinkerbellMapCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
 
     # # # Fluid Control
     ####################################################################################################################
@@ -226,12 +272,17 @@ registered_envs = ["Acrobot-v0",
                    "WetChicken-v0",
                    "ABCFlow-v0",
                    "BickleyJetFlow-v0",
+                   "Chua-v0",
                    "DoubleGyreFlow-v0",
                    "KS-v0",
+                   "Lorenz63-v0",
                    "QuadrupleGyreFlow-v0",
+                   "Rossler-v0",
                    "HenonMap-v0",
+                   "IkedaMap-v0",
                    "LogisticMap-v0",
                    "TentMap-v0",
+                   "TinkerbellMap-v0",
                    "FluidicPinball-v0",
                    "BoatInCurrent-v0"
                    ]

@@ -34,7 +34,7 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 
         self.max_control: float = 0.1
 
-        self.max_steps_in_episode: int = 300
+        self.max_steps_in_episode: int = 1000
 
         self.horizon: int = 200
 
@@ -83,23 +83,20 @@ class HenonMapCSCA(base_env.BaseEnvironment):
                         state_tp1: EnvState,
                         key: chex.PRNGKey = None,
                         ) -> Tuple[chex.Array, chex.Array]:
-        reward = -jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point, 2)
+        err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
+        reward = -jnp.linalg.norm(err, 2)
         # the above can set more specific norm distances
 
         # TODO state_t or state_tp1
-        boundary_done_x = jnp.logical_or(state_tp1.x <= -10, state_tp1.x >= 10)
-        boundary_done_y = jnp.logical_or(state_tp1.y <= -10, state_tp1.y >= 10)
-        boundary_done = jnp.logical_or(boundary_done_x, boundary_done_y)
-        goal_done = jnp.logical_and(jnp.abs(state_tp1.x - self.fixed_point[0]) < self.reward_ball,
-                                    jnp.abs(state_tp1.y - self.fixed_point[1]) < self.reward_ball, )
-        done_condition = jnp.logical_or(boundary_done, goal_done)
-        done = jax.lax.select(done_condition,  # TODO is there a better way to do this?
-                              jnp.array(True),
-                              jnp.array(False))
+        # boundary_done_x = jnp.logical_or(state_tp1.x <= -10, state_tp1.x >= 10)
+        # boundary_done_y = jnp.logical_or(state_tp1.y <= -10, state_tp1.y >= 10)
+        # boundary_done = jnp.logical_or(boundary_done_x, boundary_done_y)
+        boundary_done = jnp.linalg.norm(state_tp1.x) > 1e3
+        goal_done = jnp.linalg.norm(err) < self.reward_ball
 
-        fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_episode)
+        done = jnp.logical_or(jnp.logical_or(boundary_done, goal_done), state_tp1.time >= self.max_steps_in_episode)
 
-        return reward, fin_done
+        return reward, done
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:

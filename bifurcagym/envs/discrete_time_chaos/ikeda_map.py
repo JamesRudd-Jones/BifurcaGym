@@ -6,46 +6,47 @@ from bifurcagym import spaces
 from flax import struct
 from typing import Any, Dict, Tuple, Union
 import chex
-from bifurcagym.envs import utils
 
 
 @struct.dataclass
 class EnvState(base_env.EnvState):
     x: jnp.ndarray
+    y: jnp.ndarray
     time: int
 
 
-class Lorenz63CSCA(base_env.BaseEnvironment):
+class IkedaMapCSCA(base_env.BaseEnvironment):
     """
-    Lorenz system:
-      x' = sigma (y - x)
-      y' = x (rho - z) - y
-      z' = x y - beta z
+    Ikeda map:
+      x_{n+1} = 1 + u (x cos(tau) - y sin(tau))
+      y_{n+1} =     u (x sin(tau) + y cos(tau))
+      tau = k - p / (1 + x^2 + y^2)
 
-    Control u perturbs rho: rho_eff = rho + u (clipped).
+    Control action perturbs parameter u: u_eff = u + a (clipped), where u is the Ikeda parameter.
     """
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.sigma: float = 10.0
-        self.rho: float = 28.0
-        self.beta: float = 8.0 / 3.0
+        self.u_param: float = 0.918
+        self.k: float = 0.4
+        self.p: float = 6.0
 
-        self.dt: float = 0.01
-        self.substeps: int = 5
+        self.fixed_point: jnp.ndarray = jnp.array((1.055,
+                                                   -0.055))
 
-        self.max_control: float = 5.0  # rho perturbation bound
+        self.max_control: float = 0.05  # perturbation to u_param
+        self.u_min: float = 0.0
+        self.u_max: float = 0.99  # keep in typical stable range
 
-        self.max_steps_in_episode: int = int(500 // self.dt)
-        self.reward_ball: float = 1e-2
+        self.reward_ball: float = 1e-3
 
-        self.start_point = jnp.array([1.0, 1.0, 1.0], dtype=jnp.float64)
+        self.start_point = jnp.array([0.1, 0.1], dtype=jnp.float64)
         self.random_start: bool = False  # TODO turn it into an env kwargs
-        self.random_start_low = jnp.array([-10.0, -10.0, 0.0], dtype=jnp.float64)
-        self.random_start_high = jnp.array([10.0, 10.0, 30.0], dtype=jnp.float64)
+        self.random_start_low = jnp.array([-2.0, -2.0], dtype=jnp.float64)
+        self.random_start_high = jnp.array([2.0, 2.0], dtype=jnp.float64)
 
-        self.fixed_point = jnp.array([0.0, 0.0, 0.0], dtype=jnp.float64)
+        self.max_steps_in_episode: int = 2000
 
         self.horizon: int = 200
 
@@ -54,10 +55,20 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                  state: EnvState,
                  key: chex.PRNGKey,
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        u = self.action_convert(input_action)
+        action = self.action_convert(input_action)
 
-        new_x = utils.integrate_ode(self._f, state.x, u, self.dt, self.substeps)
-        new_state = EnvState(x=new_x, time=state.time + 1)
+        u_eff = jnp.clip(self.u_param + action, self.u_min, self.u_max)
+
+        r2 = 1.0 + state.x * state.x + state.y * state.y
+        tau = self.k - self.p / r2
+
+        ct = jnp.cos(tau)
+        st = jnp.sin(tau)
+
+        new_x = 1.0 + u_eff * (state.x * ct - state.y * st)
+        new_y = u_eff * (state.x * st + state.y * ct)
+
+        new_state = EnvState(x=new_x, y=new_y, time=state.time + 1)
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, key)
 
@@ -71,20 +82,12 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                 done,
                 {})
 
-    def _f(self, x: chex.Array, u: chex.Array) -> chex.Array:
-        sigma, beta = self.sigma, self.beta
-        rho_eff = self.rho + u  # control perturbs rho
-        X, Y, Z = x[0], x[1], x[2]
-        dx = sigma * (Y - X)
-        dy = X * (rho_eff - Z) - Y
-        dz = X * Y - beta * Z
-        return jnp.array([dx, dy, dz], dtype=jnp.float64)
-
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
-        same_state = EnvState(x=self.start_point, time=0)
-        rand_x = jrandom.uniform(_key, shape=(3,), minval=self.random_start_low, maxval=self.random_start_high)
-        random_state = EnvState(x=rand_x, time=0)
+        same_state = EnvState(x=self.start_point[0], y=self.start_point[1], time=0)
+        rand_start = jrandom.uniform(_key, shape=(2,), minval=self.random_start_low, maxval=self.random_start_high)
+        random_state = EnvState(x=rand_start[0], y=rand_start[1], time=0)
+
         state = jax.tree.map(lambda r, s: jax.lax.select(self.random_start, r, s), random_state, same_state)
 
         return self.get_obs(state), state
@@ -95,12 +98,15 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                                  state_tp1: EnvState,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
-        err = state_tp1.x - self.fixed_point
+        err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
         reward = -jnp.sum(err * err)
 
         state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_episode
-        done = jnp.logical_or(state_done, time_done)
+
+        diverged = jnp.linalg.norm(state_tp1.x) > 1e4
+
+        done = jnp.logical_or(jnp.logical_or(state_done, time_done), diverged)
 
         return reward, done
 
@@ -109,24 +115,24 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
         return jnp.clip(action, -self.max_control, self.max_control).squeeze()
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
-        return jnp.asarray(state.x)
+        return jnp.array((state.x, state.y))
 
     def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
-        return EnvState(x=jnp.asarray(obs), time=-1)
+        return EnvState(x=obs[0], y=obs[1], time=-1)
 
     @property
     def name(self) -> str:
-        return "Lorenz63-v0"
+        return "IkedaMap-v0"
 
     def action_space(self) -> spaces.Box:
         return spaces.Box(-self.max_control, self.max_control, shape=(1,), dtype=jnp.float64)
 
     def observation_space(self) -> spaces.Box:
-        # Lorenz is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
-        return spaces.Box(-1e6, 1e6, shape=(3,), dtype=jnp.float64)
+        # IkedaMap is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
+        return spaces.Box(-1e6, 1e6, shape=(2,), dtype=jnp.float64)
 
 
-class Lorenz63CSDA(Lorenz63CSCA):
+class IkedaMapCSDA(IkedaMapCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
