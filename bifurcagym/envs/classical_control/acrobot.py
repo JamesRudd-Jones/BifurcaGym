@@ -45,7 +45,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
         self.dt: float = 0.2
 
-        self.max_steps_in_episode: int = int(500 // self.dt)
+        self.max_steps_in_episode: int = int(400 // self.dt)
 
     def step_env(self,
                  input_action: Union[int, float, chex.Array],

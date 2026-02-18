@@ -35,7 +35,7 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
 
         self.goal_state = jnp.array((1.8, 0.8))
 
-        self.max_steps_in_episode: int = int(500 // self.dt)
+        self.max_steps_in_episode: int = int(200 // self.dt)
 
     def step_env(self,
                  input_action: Union[jnp.int_, jnp.float_, chex.Array],
