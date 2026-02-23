@@ -35,7 +35,7 @@ class IkedaMapCSCA(base_env.BaseEnvironment):
         self.fixed_point: jnp.ndarray = jnp.array((0.532754622941,
                                                    0.246896772711))
 
-        self.max_control: float = 0.05  # perturbation to u_param
+        self.max_control: float = 0.1  # perturbation to u_param
         self.u_min: float = 0.0
         self.u_max: float = 0.99  # keep in typical stable range
 
@@ -136,7 +136,7 @@ class IkedaMapCSDA(IkedaMapCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
+        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, 0.5, -1.0, -0.5))
 
     def action_convert(self,
                        action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:

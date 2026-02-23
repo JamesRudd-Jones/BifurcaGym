@@ -35,7 +35,7 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
         self.dt: float = 0.01
         self.substeps: int = 5
 
-        self.max_control: float = 2.0  # 5.0  # rho perturbation bound
+        self.max_control: jnp.ndarray = jnp.array((2.0, 5.0, 0.5))  # 2.0  # 5.0  # rho perturbation bound
         self.num_actions: int = 3
 
         self.max_steps_in_episode: int = int(200 // self.dt)

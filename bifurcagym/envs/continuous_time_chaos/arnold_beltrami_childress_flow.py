@@ -95,13 +95,13 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
         return u, v, w
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        # state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), z=jnp.array(0.2), time=0)
+        state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), z=jnp.array(0.2), time=0)
 
-        key_x, key_y, key_z = jrandom.split(key, 3)
-        state = EnvState(x=jrandom.uniform(key_x, (), minval=0.1, maxval=0.3),
-                         y=jrandom.uniform(key_y, (), minval=0.1, maxval=0.3),
-                         z=jrandom.uniform(key_z, (), minval=0.1, maxval=0.3),
-                         time=0)
+        # key_x, key_y, key_z = jrandom.split(key, 3)
+        # state = EnvState(x=jrandom.uniform(key_x, (), minval=0.1, maxval=0.3),
+        #                  y=jrandom.uniform(key_y, (), minval=0.1, maxval=0.3),
+        #                  z=jrandom.uniform(key_z, (), minval=0.1, maxval=0.3),
+        #                  time=0)
 
         return self.get_obs(state), state
 
@@ -254,15 +254,15 @@ class ABCFlowCSDA(ABCFlowCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        # 7 actions: noop and rook moves, no diagonals for scalability as of now
-        self.action_array: chex.Array = jnp.array(((0.0, 0.0, 0.0),
-                                                   (1.0, 0.0, 0.0),
-                                                   (-1.0, 0.0, 0.0),
-                                                   (0.0, 1.0, 0.0),
-                                                   (0.0, -1.0, 0.0),
-                                                   (0.0, 0.0, 1.0),
-                                                   (0.0, 0.0, -1.0),
-                                                   ))
+        # # 7 actions: noop and rook moves, no diagonals for scalability as of now
+        # self.action_array: chex.Array = jnp.array(((0.0, 0.0, 0.0),
+        #                                            (1.0, 0.0, 0.0),
+        #                                            (-1.0, 0.0, 0.0),
+        #                                            (0.0, 1.0, 0.0),
+        #                                            (0.0, -1.0, 0.0),
+        #                                            (0.0, 0.0, 1.0),
+        #                                            (0.0, 0.0, -1.0),
+        #                                            ))
 
         # diagonals
         self.action_opts: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
