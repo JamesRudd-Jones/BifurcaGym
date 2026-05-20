@@ -4,7 +4,7 @@ import jax.random as jrandom
 from functools import partial
 import chex
 from typing import Any, Dict, Tuple, Union
-from bifurcagym.envs import EnvState
+from bifurcagym.envs import EnvState, EnvParams
 from flax import struct
 import dataclasses
 
@@ -43,15 +43,19 @@ class MetricsWrapper(object):
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
-             action: Union[jnp.int_, jnp.float_, chex.Array],
+             action: chex.Numeric,
              state: MetricsEnvState,
+             params: EnvParams,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, MetricsEnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         # base_env_state = self._to_base_env_state(state)
         # obs, delta_obs, new_base_env_state, reward, done, info = self._wrapped_metrics_env.step(action, base_env_state, key)
         # base_dict = dataclasses.asdict(new_base_env_state)
         # base_env_state = self._to_base_env_state(state)
-        obs, delta_obs, nenv_state, reward, done, info = self._wrapped_metrics_env.step(action, state.env_state, key)
+        obs, delta_obs, nenv_state, reward, done, info = self._wrapped_metrics_env.step(action,
+                                                                                        state.env_state,
+                                                                                        params,
+                                                                                        key)
         new_episode_return = state.episode_returns + reward
         new_episode_length = state.episode_lengths + 1
         # state = MetricsEnvState(**base_dict,
@@ -81,8 +85,8 @@ class MetricsWrapper(object):
         # TODO it is a challenging problem
 
     @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, MetricsEnvState]:
-        obs, base_env_state = self._wrapped_metrics_env.reset(key)
+    def reset(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, MetricsEnvState]:
+        obs, base_env_state = self._wrapped_metrics_env.reset(params, key)
         # base_dict = dataclasses.asdict(base_env_state)
         # state = MetricsEnvState(**base_dict,
         #                         episode_lengths=0,

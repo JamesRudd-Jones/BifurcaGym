@@ -16,7 +16,7 @@ import itertools
 
 env_names = [
              # "Acrobot-v0",
-             # "CartPole-v0",
+             "CartPole-v0",
              # "NCartPole-v0",
              # "Pendubot-v0",
              # "Pendulum-v0",
@@ -25,7 +25,7 @@ env_names = [
              # "Chua-v0",
              # "DoubleGyreFlow-v0",
              #  "KS-v0",
-             "Lorenz63-v0",
+             # "Lorenz63-v0",
              # "Rossler-v0",
              # "HenonMap-v0",
              # "IkedaMap-v0",

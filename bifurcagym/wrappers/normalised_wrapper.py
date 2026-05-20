@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from functools import partial
 import chex
 from typing import Any, Dict, Tuple, Union
-from bifurcagym.envs import EnvState
+from bifurcagym.envs import EnvState, EnvParams
 from bifurcagym import spaces
 
 
@@ -59,12 +59,14 @@ class NormalisedEnvCSDA(object):
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
-             action: Union[jnp.int_, jnp.float_, chex.Array],
+             action: chex.Numeric,
              state: EnvState,
+             params: EnvParams,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         unnorm_obs, unnorm_delta_obs, env_state, rew, done, info = self._wrapped_normalised_env.step(action,
                                                                                                      state,
+                                                                                                     params,
                                                                                                      key)
 
         return (self.normalise_obs(unnorm_obs),
@@ -76,15 +78,16 @@ class NormalisedEnvCSDA(object):
 
     @partial(jax.jit, static_argnums=(0,))
     def generative_step(self,
-                        action: Union[jnp.int_, jnp.float_, chex.Array],
+                        action: chex.Numeric,
                         gen_obs: chex.Array,
+                        params: EnvParams,
                         key: chex.PRNGKey,
                         ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        return self.step(action, self.get_state(gen_obs), key)
+        return self.step(action, self.get_state(gen_obs), params, key)
 
     @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        unnorm_obs, env_state = self._wrapped_normalised_env.reset(key)
+    def reset(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
+        unnorm_obs, env_state = self._wrapped_normalised_env.reset(params, key)
         return self.normalise_obs(unnorm_obs), env_state
 
     @partial(jax.jit, static_argnums=(0,))
@@ -93,13 +96,14 @@ class NormalisedEnvCSDA(object):
                                                                    self.unnormalise_delta_obs(delta_obs))
         return self.normalise_obs(unnorm_nobs)
 
-    def reward_function(self,
-                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
-                        state_t: EnvState,
-                        state_tp1: EnvState,
-                        key: chex.PRNGKey = None,
-                        ) -> chex.Array:
-        reward = self._wrapped_normalised_env.reward_function(input_action_t, state_t, state_tp1, key)
+    def reward_and_done_function(self,
+                                 input_action_t: chex.Numeric,
+                                 state_t: EnvState,
+                                 state_tp1: EnvState,
+                                 params: EnvParams,
+                                 key: chex.PRNGKey = None,
+                                 ) -> chex.Array:
+        reward = self._wrapped_normalised_env.reward_and_done_function(input_action_t, state_t, state_tp1, params, key)
         return self.normalise_rew(reward)
 
     def get_state(self, obs: chex.Array) -> EnvState:
@@ -175,13 +179,15 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
-             action: Union[jnp.int_, jnp.float_, chex.Array],
+             action: chex.Numeric,
              state: EnvState,
+             params: EnvParams,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         unnorm_action = self.unnormalise_action(action)
         unnorm_obs, unnorm_delta_obs, env_state, rew, done, info = self._wrapped_normalised_env.step(unnorm_action,
                                                                                                      state,
+                                                                                                     params,
                                                                                                      key)
 
         return (self.normalise_obs(unnorm_obs),
@@ -191,24 +197,29 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
                 done,
                 info)
 
-    def reward_function(self,
-                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
-                        state_t: EnvState,
-                        state_tp1: EnvState,
-                        key: chex.PRNGKey = None,
-                        ) -> chex.Array:
+    def reward_and_done_function(self,
+                                 input_action_t: chex.Numeric,
+                                 state_t: EnvState,
+                                 state_tp1: EnvState,
+                                 params: EnvParams,
+                                 key: chex.PRNGKey = None,
+                                 ) -> chex.Array:
         unnorm_action = self.unnormalise_action(input_action_t)
-        unnorm_reward = self._wrapped_normalised_env.reward_function(unnorm_action, state_t, state_tp1, key)
+        unnorm_reward = self._wrapped_normalised_env.reward_and_done_function(unnorm_action,
+                                                                              state_t,
+                                                                              state_tp1,
+                                                                              params,
+                                                                              key)
 
         return self.normalise_rew(unnorm_reward)
 
-    def normalise_action(self, action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+    def normalise_action(self, action: chex.Numeric) -> chex.Numeric:
         pos_action = action - self.unnorm_action_space.low
         norm_action = self.norm_action_space_range * pos_action / self.unnorm_action_space_range + self.action_space().low
 
         return norm_action
 
-    def unnormalise_action(self, norm_action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
+    def unnormalise_action(self, norm_action: chex.Numeric) -> chex.Numeric:
         pos_action = self.unnorm_action_space_range * (norm_action - self.action_space().low) / self.norm_action_space_range
         action = pos_action + self.unnorm_action_space.low
 

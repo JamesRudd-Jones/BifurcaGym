@@ -261,7 +261,7 @@ def make(env_id: str,
     if metrics:
         env = MetricsWrapper(env)
 
-    return env
+    return env, env.default_params
 
 
 registered_envs = ["Acrobot-v0",

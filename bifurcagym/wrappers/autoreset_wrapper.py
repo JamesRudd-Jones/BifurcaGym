@@ -4,7 +4,7 @@ import jax.random as jrandom
 from functools import partial
 import chex
 from typing import Any, Dict, Tuple, Union
-from bifurcagym.envs import EnvState
+from bifurcagym.envs import EnvState, EnvParams
 
 
 class AutoResetWrapper(object):
@@ -25,13 +25,14 @@ class AutoResetWrapper(object):
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self,
-             action: Union[jnp.int_, jnp.float_, chex.Array],
+             action: chex.Numeric,
              state: EnvState,
+             params: EnvParams,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, EnvState, jnp.ndarray, jnp.ndarray, Dict[Any, Any]]:
-        obs_st, delta_obs_st, state_st, reward, done, info = self._wrapped_autoreset_env.step(action, state, key)
+        obs_st, delta_obs_st, state_st, reward, done, info = self._wrapped_autoreset_env.step(action, state, params, key)
         key, key_reset = jrandom.split(key)
-        obs_re, state_re = self._wrapped_autoreset_env.reset(key_reset)
+        obs_re, state_re = self._wrapped_autoreset_env.reset(params, key_reset)
         # Auto-reset environment based on termination
         state = jax.tree.map(lambda x, y: jax.lax.select(done, x, y), state_re, state_st)
         obs = jax.lax.select(done, obs_re, obs_st)

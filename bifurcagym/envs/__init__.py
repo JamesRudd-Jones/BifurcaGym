@@ -1,5 +1,5 @@
 from bifurcagym.envs import base_env, utils
-from bifurcagym.envs.base_env import EnvState
+from bifurcagym.envs.base_env import EnvState, EnvParams
 from bifurcagym.envs.classical_control import (acrobot,
                                                cartpole,
                                                n_cartpole,
