@@ -33,13 +33,13 @@ class EnvParams:
     com_pos_2: float = 0.5
     moi: float = 1.0
     max_vel_1: float = 4 * jnp.pi
-    maximum_max_vel_1: float = struct.field(pytree_node=False, default=4 * jnp.pi)  # maximum to ensure correct scaling
+    maximum_max_vel_1: float = struct.field(False, default=4 * jnp.pi)  # maximum to ensure correct scaling
     max_vel_2: float = 9 * jnp.pi
-    maximum_max_vel_2: float = struct.field(pytree_node=False, default=9 * jnp.pi)  # maximum to ensure correct scaling
+    maximum_max_vel_2: float = struct.field(False, default=9 * jnp.pi)  # maximum to ensure correct scaling
 
     action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
     max_torque: float = 1.0
-    maximum_max_torque: float = struct.field(pytree_node=False, default=1.0)  # maximum to ensure correct scaling
+    maximum_max_torque: float = struct.field(False, default=1.0)  # maximum to ensure correct scaling
     torque_noise_max: float = 0.0
 
     dt: float = 0.2

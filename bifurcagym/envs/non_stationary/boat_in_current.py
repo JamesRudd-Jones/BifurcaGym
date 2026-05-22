@@ -25,7 +25,73 @@ class EnvState(base_env.EnvState):
     y: chex.Array
     fluid_u: chex.Array
     fluid_v: chex.Array
-    time: int
+
+
+@struct.dataclass
+class EnvParams:
+    fluid_dt: float = struct.field(False, default=0.2)
+    fluid_iterations: int = struct.field(False, default=20)  # Number of iterations for the linear solver
+
+    self.length: float = 15.0
+    self.width: float = 15.0
+
+    self.max_current: float = 0.2
+
+    self.current_noise_scale: float = 0.04
+
+    self.fluid_viscosity: float = 1e-6
+
+    self.fluid_force: float = 40.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
+    self.current_scaling_factor: float = 0.5  # Scales the effect of the current on the boat
+
+    self.is_deterministic: bool = True
+    self.is_heteroskedastic: bool = False
+    self.is_non_stationary: bool = False
+    self.is_chaotic: bool = True
+    self.is_chaotic_new: bool = True  # TODO remvove all the old things as new is better although so compute intensive
+
+    if self.is_chaotic:
+        self.fluid_grid_size: int = 128  # 256
+    else:
+        self.fluid_grid_size: int = 1  # TODO think this is fine since it still applies the stochasticity?
+
+    self.fluid_grid_size_plot = 128  # 256
+
+    self.grid = grids.Grid((self.fluid_grid_size, self.fluid_grid_size), domain=((0, self.length), (0, self.width)))
+    self.density = 1.0
+    self.viscosity = 1e-3
+    self.max_velocity = 7
+    self.cfl_safety_factor = 0.5
+    self.dt = base.equations.stable_time_step(self.max_velocity, self.cfl_safety_factor, self.viscosity, self.grid)
+    self.inner_steps = 25
+
+    if self.is_non_stationary:
+        self.current_func = self.nonstationary_current_func
+        self.reset_func = self.nonstationary_reset_func
+    elif self.is_chaotic:
+        if self.is_chaotic_new:
+            self.current_func = self.chaotic_current_func_new
+            self.reset_func = self.chaotic_reset_func_new
+        else:
+            self.current_func = self.chaotic_current_func
+            self.reset_func = self.chaotic_reset_func
+    else:
+        self.current_func = self.stationary_current_func
+        self.reset_func = self.stationary_reset_func
+
+    if self.is_deterministic:
+        self.noise_func = self.no_noise
+        self.is_heteroskedastic = False  # TODO just ensures this for plot/file naming purposes
+    else:
+        if self.is_heteroskedastic:
+            self.noise_func = self.heteroskedastic_noise
+        else:
+            self.noise_func = self.homoskedastic_noise
+
+    self.goal_state = jnp.array((self.width, self.length))
+
+    self.max_action: float = 1.0
+    self.horizon: int = 200
 
 
 
@@ -44,68 +110,9 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.length: float = 15.0
-        self.width: float = 15.0
-
-        self.max_current: float = 0.2
-
-        self.current_noise_scale: float = 0.04
-
-        self.fluid_dt: float = 0.2
-        self.fluid_viscosity: float = 1e-6
-        self.fluid_iterations: int = 20  # Number of iterations for the linear solver
-        self.fluid_force: float = 40.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
-        self.current_scaling_factor: float = 0.5  # Scales the effect of the current on the boat
-
-        self.is_deterministic: bool = True
-        self.is_heteroskedastic: bool = False
-        self.is_non_stationary: bool = False
-        self.is_chaotic: bool = True
-        self.is_chaotic_new: bool = True  # TODO remvove all the old things as new is better although so compute intensive
-
-        if self.is_chaotic:
-            self.fluid_grid_size: int = 128  # 256
-        else:
-            self.fluid_grid_size: int = 1  # TODO think this is fine since it still applies the stochasticity?
-
-        self.fluid_grid_size_plot = 128  # 256
-
-        self.grid = grids.Grid((self.fluid_grid_size, self.fluid_grid_size), domain=((0, self.length), (0, self.width)))
-        self.density = 1.0
-        self.viscosity = 1e-3
-        self.max_velocity = 7
-        self.cfl_safety_factor = 0.5
-        self.dt = base.equations.stable_time_step(self.max_velocity, self.cfl_safety_factor, self.viscosity, self.grid)
-        self.inner_steps = 25
-
-        if self.is_non_stationary:
-            self.current_func = self.nonstationary_current_func
-            self.reset_func = self.nonstationary_reset_func
-        elif self.is_chaotic:
-            if self.is_chaotic_new:
-                self.current_func = self.chaotic_current_func_new
-                self.reset_func = self.chaotic_reset_func_new
-            else:
-                self.current_func = self.chaotic_current_func
-                self.reset_func = self.chaotic_reset_func
-        else:
-            self.current_func = self.stationary_current_func
-            self.reset_func = self.stationary_reset_func
-
-        if self.is_deterministic:
-            self.noise_func = self.no_noise
-            self.is_heteroskedastic = False  # TODO just ensures this for plot/file naming purposes
-        else:
-            if self.is_heteroskedastic:
-                self.noise_func = self.heteroskedastic_noise
-            else:
-                self.noise_func = self.homoskedastic_noise
-
-
-        self.goal_state = jnp.array((self.width, self.length))
-
-        self.max_action: float = 1.0
-        self.horizon: int = 200
+    @property
+    def default_params(self) -> EnvParams:
+        return EnvParams()
 
     def step_env(self,
                  input_action: Union[jnp.int_, jnp.float_, chex.Array],

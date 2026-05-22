@@ -3,11 +3,10 @@ Abstract base env for all further environments
 """
 
 from functools import partial
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 from flax import struct
 import jax
-import jax.numpy as jnp
 import abc
 
 
@@ -44,9 +43,10 @@ class BaseEnvironment(abc.ABC):
     def generative_step(self,
                         action: chex.Numeric,
                         gen_obs: chex.Array,
+                        params: EnvParams,
                         key: chex.PRNGKey,
                         ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        return self.step_env(action, self.get_state(gen_obs), key)
+        return self.step_env(action, self.get_state(gen_obs, params), params, key)
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:

@@ -12,25 +12,24 @@ import chex
 class EnvState(base_env.EnvState):
     theta: jnp.ndarray
     theta_dot: jnp.ndarray
-    time: int
 
 
 @struct.dataclass
 class EnvParams:
-    action_array: jnp.ndarray = struct.field(pytree_node=False, default=(jnp.array((0.0, 1.0, -1.0))))
-    dt: float = struct.field(pytree_node=False, default=0.05)
-    horizon: int = struct.field(pytree_node=False, default=200)
-    max_steps_in_ep: int = struct.field(pytree_node=False, default=1000)
-    periodic_dim: jnp.ndarray = struct.field(pytree_node=False, default=jnp.array((1, 0)))  # TODO is this the best way?
+    action_array: jnp.ndarray = struct.field(False, default=(jnp.array((0.0, 1.0, -1.0))))
+    dt: float = struct.field(False, default=0.05)
+    horizon: int = struct.field(False, default=200)
+    max_steps_in_ep: int = struct.field(False, default=1000)
+    periodic_dim: jnp.ndarray = struct.field(False, default=jnp.array((1, 0)))  # TODO is this the best way?
 
     max_speed: float = 8.0
-    maximum_max_speed: float = struct.field(pytree_node=False, default=8.0)  # maximum to ensure correct scaling
+    maximum_max_speed: float = struct.field(False, default=8.0)  # maximum to ensure correct scaling
     gravity: float = 10.0
     mass: float = 1.0
     length: float = 1.0
 
     max_torque: float = 2.0
-    maximum_max_torque: float = struct.field(pytree_node=False, default=2.0)  # maximum to ensure correct scaling
+    maximum_max_torque: float = struct.field(False, default=2.0)  # maximum to ensure correct scaling
 
 
 class PendulumCSDA(base_env.BaseEnvironment):

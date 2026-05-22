@@ -15,21 +15,21 @@ def runge_kutta_4(y0, func, dt):  # TODO sort out standardising which rk4 to use
     return y_out
 
 
-def rk4_step(f, x: chex.Array, u: chex.Array, dt: float) -> chex.Array:
+def rk4_step(f, x: chex.Array, u: chex.Array, dt: float, params) -> chex.Array:
     """One RK4 step for x' = f(x, u)."""
-    k1 = f(x, u)
-    k2 = f(x + 0.5 * dt * k1, u)
-    k3 = f(x + 0.5 * dt * k2, u)
-    k4 = f(x + dt * k3, u)
+    k1 = f(x, u, params)
+    k2 = f(x + 0.5 * dt * k1, u, params)
+    k3 = f(x + 0.5 * dt * k2, u, params)
+    k4 = f(x + dt * k3, u, params)
     return x + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
-def integrate_ode(f, x0: chex.Array, u: chex.Array, dt: float, substeps: int) -> chex.Array:
+def integrate_ode(f, x0: chex.Array, u: chex.Array, dt: float, substeps: int, params) -> chex.Array:
     """Integrate for dt_total = dt using `substeps` RK4 micro-steps of size dt/substeps."""
     h = dt / float(substeps)
 
     def body(x, _):
-        return rk4_step(f, x, u, h), None
+        return rk4_step(f, x, u, h, params), None
 
     xf, _ = jax.lax.scan(body, x0, xs=None, length=substeps)
     return xf

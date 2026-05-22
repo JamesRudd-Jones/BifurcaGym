@@ -45,7 +45,6 @@ BifurcaGym has the following environments currently:
 
 # TODOs
 
-- Maybe reward function should be reward and done together as they are typically aligned and would save on compute?
 - Check why normalisation seems to affect results negatively
 - Get state only works for fully observable enbs, we need to verify why we need this, I think it is because of the 
 generative env, need to clarify this and find a workaround, is there a better way to do it?
@@ -59,10 +58,6 @@ original state, the transitioned to state (allows easy one step state comparison
 stochatic rewards are beneficial. However, thought needs to go into how the random process is managed if comparing 
 rewards from the environment with rewards calculated from collected trajectories. A benefit of Jax though is it can be 
 fairly easy to store and track random keys to that this would be possible if needed.
-- Should we add back in params outside the env? Cons of this approach are ineffective calculation of params, as in
-it is unclear if can do params 1 * param 2 and then store this so don't have to repeat the calc. Pros are perhaps for
-non-stationary envs then it may be way easier to define params outside the env so they can change in a functional loop.
-- Do we want a vmap wrapper? Used to have one but removed as felt fairly pointless
 
 Add the following envs:
 - N Link Pendulum

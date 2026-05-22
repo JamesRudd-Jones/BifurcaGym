@@ -26,11 +26,11 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    action_array: jnp.ndarray = struct.field(pytree_node=False, default=(jnp.array((0.0, 1.0, -1.0))))
-    dt: float = struct.field(pytree_node=False, default=0.1)
-    horizon: int = struct.field(pytree_node=False, default=25)
-    max_steps_in_ep: int = struct.field(pytree_node=False, default=500)
-    num_poles: int = struct.field(pytree_node=False, default=2)
+    action_array: jnp.ndarray = struct.field(False, default=(jnp.array((0.0, 1.0, -1.0))))
+    dt: float = struct.field(False, default=0.1)
+    horizon: int = struct.field(False, default=25)
+    max_steps_in_ep: int = struct.field(False, default=500)
+    num_poles: int = struct.field(False, default=2)
 
     gravity: float = 9.82
     mass_cart: float = 0.5  # 1.0

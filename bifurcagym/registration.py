@@ -1,6 +1,7 @@
 from bifurcagym.envs.classical_control import (acrobot,
                                                cartpole,
                                                n_cartpole,
+                                               n_pendulum,
                                                pendulum,
                                                wet_chicken)
 
@@ -77,7 +78,13 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
-    # TODO add in n pendulum here
+    elif env_id == "NPendulum-v0":
+        if cont_state and cont_action:
+            env = n_pendulum.NPendulumCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = n_pendulum.NPendulumCSDA
+        else:
+            raise ValueError("No Discrete State version.")
 
     elif env_id == "Pendulum-v0":
         if cont_state and cont_action:
@@ -251,7 +258,7 @@ def make(env_id: str,
         elif cont_state and cont_action:
             env = NormalisedWrapperCSCA(env)
         else:
-            raise ValueError("No Normalise Wrapper for Discrete State Continuous Action.")
+            raise ValueError("No Normalising Wrapper for Discrete State Continuous Action.")
 
     # # # Enables an autoresetting environment that works well with jax.lax.scan, but not necessary for a for loop with conditionals that can't be Jitted
     ####################################################################################################################
@@ -267,6 +274,7 @@ def make(env_id: str,
 registered_envs = ["Acrobot-v0",
                    "CartPole-v0",
                    "NCartPole-v0",
+                   "NPendulum-v0",
                    "Pendubot-v0",
                    "Pendulum-v0",
                    "WetChicken-v0",

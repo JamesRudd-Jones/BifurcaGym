@@ -12,12 +12,87 @@ from flax import struct
 from typing import Any, Dict, Tuple, Union
 import chex
 from pathlib import Path
+import cmocean
 
 
 @struct.dataclass
 class EnvState(base_env.EnvState):
     u: jnp.ndarray
-    time: int
+
+
+@struct.dataclass
+class EnvParams:
+    here = Path(__file__).resolve().parent
+    data_dir = here / "ks_files"
+
+    action_array: chex.Array = struct.field(False, default=jnp.array((0.0, 1.0, -1.0)))
+    action_dim: int = struct.field(False, default=4)
+    state_dim: int = struct.field(False, default=8)
+
+    dt: float = struct.field(False, default=0.05)
+
+    x: chex.Array = struct.field(False, default=jnp.array(np.loadtxt(data_dir / "x.dat")))  # select space discretisation of the target solution
+    U_bf: chex.Array = struct.field(False, default=jnp.array(np.loadtxt(data_dir / 'u2.dat')))  # select u1, u2 or u3 as target solution
+    N: int = struct.field(False, default=x.default.size)
+
+    reward_ball: float = struct.field(False, default=0.01)
+
+    L: int = struct.field(False, default=22)
+
+    max_control: float = 0.1
+    maximum_max_control: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling
+
+    sig: float = 0.4
+
+    def action_perms(self) -> chex.Array:
+        idx = jnp.arange(self.action_array.shape[0] ** self.action_dim)
+        powers = self.action_array.shape[0] ** jnp.arange(self.action_dim)
+        digits = (idx[:, None] // powers[None, :]) % self.action_array.shape[0]
+        return self.action_array[digits]
+        # TODO this does not scale very nicely
+        # TODO should I add the following to utils to standardise it? if it is okay to use
+
+    @property
+    def max_steps_in_ep(self) -> int:
+        return int(500 // self.dt)
+
+    @property
+    def x_S(self) -> chex.Array:
+        return jnp.arange(self.N) * self.L / self.N
+
+    @property
+    def k_K(self) -> chex.Array:
+        return self.N * jnp.fft.fftfreq(self.N)[0:self.N // 2 + 1] * 2 * jnp.pi / self.L
+
+    @property
+    def ik_K(self) -> chex.Array:
+        return 1j * self.k_K  # spectral derivative operator
+
+    @property
+    def lin_K(self) -> chex.Array:
+        return self.k_K ** 2 - self.k_K ** 4  # Fourier multipliers for linear term
+
+    @property
+    def x_zero_A(self) -> chex.Array:
+        return self.x_S[-1] / self.action_dim * jnp.arange(0, self.action_dim)
+
+    @property
+    def gaus(self) -> chex.Array:
+        return 1 / (jnp.sqrt(2 * jnp.pi) * self.sig) * jnp.exp(-0.5 * ((self.x_S - self.x_S[self.x_S.size // 2]) / self.sig) ** 2)
+
+    @property
+    def B_SA(self) -> chex.Array:
+        def process_single(gaus, x_zero, x_S_center, dx):
+            shift = jnp.floor(x_zero - x_S_center) / dx
+            col = jnp.roll(gaus, shift.astype(int))
+            col = col / jnp.max(col)
+            return jnp.roll(col, 5)
+
+        return jax.vmap(process_single, in_axes=(None, 0, None, None))(self.gaus,
+                                                                       self.x_zero_A,
+                                                                       self.x_S[self.x_S.size // 2],
+                                                                       self.x_S[1] - self.x_S[0],
+                                                                       ).T
 
 
 class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
@@ -25,53 +100,20 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        here = Path(__file__).resolve().parent
-        self.data_dir = here / "ks_files"
-
-        self.x: jnp.ndarray = jnp.array(np.loadtxt(self.data_dir / "x.dat"))  # select space discretisation of the target solution
-        self.U_bf: jnp.ndarray = jnp.array(np.loadtxt(self.data_dir / 'u2.dat'))  # select u1, u2 or u3 as target solution
-        N = self.x.size
-
-        self.reward_ball: float = 0.01
-
-        self.state_dim: int = 8
-        self.action_dim: int = 4
-        self.L: int = 22
-        self.x_S = jnp.arange(N) * self.L / N
-        k_K = N * jnp.fft.fftfreq(N)[0:N // 2 + 1] * 2 * jnp.pi / self.L
-        self.ik_K = 1j * k_K  # spectral derivative operator
-        self.lin_K = k_K ** 2 - k_K ** 4  # Fourier multipliers for linear term
-
-        self.max_control: float = 0.1
-
-        self.dt: float = 0.05
-        self.max_steps_in_episode: int = int(500 // self.dt)
-
-        sig = 0.4
-        x_zero_A = self.x_S[-1] / self.action_dim * jnp.arange(0, self.action_dim)
-        gaus = 1 / (jnp.sqrt(2 * jnp.pi) * sig) * jnp.exp(-0.5 * ((self.x_S - self.x_S[self.x_S.size // 2]) / sig) ** 2)
-
-        def process_single(gaus, x_zero, x_S_center, dx):
-            shift = jnp.floor(x_zero - x_S_center) / dx
-            col = jnp.roll(gaus, shift.astype(int))
-            col = col / jnp.max(col)
-            return jnp.roll(col, 5)
-
-        self.B_SA = jax.vmap(process_single, in_axes=(None, 0, None, None))(gaus,
-                                                                            x_zero_A,
-                                                                            self.x_S[self.x_S.size // 2],
-                                                                            self.x_S[1] - self.x_S[0],
-                                                                            ).T
+    @property
+    def default_params(self) -> EnvParams:
+        return EnvParams()
 
     def step_env(self,
-                 input_action: Union[jnp.int_, jnp.float_, chex.Array],
+                 input_action: chex.Numeric,
                  state: EnvState,
+                 params: EnvParams,
                  key: chex.PRNGKey,
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        action = self.action_convert(input_action)
+        action = self.action_convert(input_action, params)
 
         # forcing shape
-        dum_SA = self.B_SA * action.T  # TODO check this transpose
+        dum_SA = params.B_SA * action.T  # TODO check this transpose
         f0_S = jnp.sum(dum_SA, axis=-1)
 
         # semi-implicit third-order runge kutta update.
@@ -82,9 +124,9 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         def _runge_kutta_update(runner, unused):
             u_K, ind = runner
-            dt = self.dt / (3 - ind)
-            u_K = u_save_K + dt * self.nlterm(u_K, f_K)
-            u_K = (u_K + 0.5 * self.lin_K * dt * u_save_K) / (1. - 0.5 * self.lin_K * dt)
+            dt = params.dt / (3 - ind)
+            u_K = u_save_K + dt * self.nlterm(u_K, f_K, params)
+            u_K = (u_K + 0.5 * params.lin_K * dt * u_save_K) / (1. - 0.5 * params.lin_K * dt)
 
             ind += 1
 
@@ -95,7 +137,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         new_state = EnvState(u=u_S, time=state.time+1)
 
-        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
         return (jax.lax.stop_gradient(self.get_obs(new_state)),
                 jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
@@ -104,60 +146,65 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                 done,
                 {})
 
-    def nlterm(self, u, f):
+    def nlterm(self, u, f, params):
         # compute tendency from nonlinear term. advection + forcing
         ur = jnp.fft.irfft(u, axis=-1)
-        return -0.5 * self.ik_K * jnp.fft.rfft(ur ** 2, axis=-1) + f
+        return -0.5 * params.ik_K * jnp.fft.rfft(ur ** 2, axis=-1) + f
 
-    def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        u_S = jnp.array(np.loadtxt(self.data_dir / 'u3.dat'))
+    def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
+        u_S = jnp.array(np.loadtxt(params.data_dir / 'u3.dat'))
         state = EnvState(u=u_S, time=0)
 
-        return self.get_obs(state), state
+        return self.get_obs(state, params), state
 
     def reward_and_done_function(self,
-                        input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
-                        state_t: EnvState,
-                        state_tp1: EnvState,
-                        key: chex.PRNGKey = None,
-                        ) -> Tuple[chex.Array, chex.Array]:
-        reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
+                                 input_action_t: chex.Numeric,
+                                 state_t: EnvState,
+                                 state_tp1: EnvState,
+                                 params: EnvParams,
+                                 key: chex.PRNGKey = None,
+                                 ) -> Tuple[chex.Array, chex.Array]:
+        reward = -jnp.linalg.norm(state_tp1.u - params.U_bf)
 
-        state_done = jax.lax.select(jnp.linalg.norm(state_tp1.u - self.U_bf) < self.reward_ball,
+        state_done = jax.lax.select(jnp.linalg.norm(state_tp1.u - params.U_bf) < params.reward_ball,
                                     jnp.array(True),
                                     jnp.array(False))
-        time_done = jax.lax.select(state_tp1.time >= self.max_steps_in_episode,
+        time_done = jax.lax.select(state_tp1.time >= params.max_steps_in_ep,
                                    jnp.array(True),
                                    jnp.array(False))
         done = jnp.logical_or(state_done, time_done)
 
         return reward, done
 
-    def action_convert(self,
-                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return jnp.clip(action, -self.max_control, self.max_control)
+    def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
+        return jnp.clip(action, -params.max_control, params.max_control)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None):
-        return state.u[5::self.x_S.shape[0] // self.state_dim]
+        return state.u[5::params.x_S.shape[0] // params.state_dim]  # TODO sort this out in a better way
 
-    def get_state(self, obs: chex.Array, jey: chex.PRNGKey = None) -> EnvState:
+    def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:
         return EnvState(u=obs[0], time=-1)
 
-    def render_traj(self, trajectory_state: EnvState, file_path: str = "../animations"):
+    def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
 
+        times = np.asarray(trajectory_state.time)
+        us = np.asarray(trajectory_state.u)
+
         fig, ax = plt.subplots(figsize=(5, 5))
         ax.set_title(self.name)
-        ax.set_xlim(trajectory_state.time[0], trajectory_state.time[-1])
+        ax.set_xlim(times[0], times[-1])
         ax.set_xlabel("Time")
         ax.set_ylabel("x")
 
         v_min = float(trajectory_state.u.min())
         v_max = float(trajectory_state.u.max())
 
-        im = ax.imshow(np.zeros((trajectory_state.time[0], trajectory_state.time[-1])).T,
-                       cmap='viridis',
+        cmap = cmocean.cm.curl
+
+        im = ax.imshow(np.zeros((times[0], times[-1])).T,
+                       cmap=cmap,
                        origin='lower',
                        vmin=v_min,
                        vmax=v_max)
@@ -166,8 +213,8 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         def update(frame):
             ax.clear()
 
-            im = ax.imshow(trajectory_state.u[:frame].T,
-                           cmap='viridis',
+            im = ax.imshow(us[:frame].T,
+                           cmap=cmap,
                            origin='lower',
                            vmin=v_min,
                            vmax=v_max)
@@ -176,7 +223,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
             # Set the limits again, or you can adjust them dynamically as needed
             ax.set_title(self.name)
-            ax.set_xlim(trajectory_state.time[0], trajectory_state.time[-1])
+            ax.set_xlim(times[0], times[-1])
             ax.set_xlabel("Time")
             ax.set_ylabel("x")
 
@@ -185,8 +232,8 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
-                                       frames=len(trajectory_state.time),
-                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       frames=len(times),
+                                       interval=params.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")
@@ -211,30 +258,20 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
     def name(self) -> str:
         return "KS-v0"
 
-    def action_space(self) -> spaces.Box:
-        return spaces.Box(-self.max_control, self.max_control, (self.action_dim,), dtype=jnp.float64)
+    def action_space(self, params: EnvParams) -> spaces.Box:
+        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, (params.action_dim,), dtype=jnp.float64)
 
-    def observation_space(self) -> spaces.Box:
+    def observation_space(self, params: EnvParams) -> spaces.Box:
         high = 10  # TODO unsure of actual size should check
-        return spaces.Box(-high, high, (self.state_dim,), dtype=jnp.float64)
+        return spaces.Box(-high, high, (params.state_dim,), dtype=jnp.float64)
 
 
 class KuramotoSivashinskyCSDA(KuramotoSivashinskyCSCA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-        self.action_array: jnp.ndarray = jnp.array((0.0, 1.0, -1.0))
+    def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
+        return params.action_perms[action.squeeze()] * params.max_control
 
-        idx = jnp.arange(self.action_array.shape[0] ** self.action_dim)
-        powers = self.action_array.shape[0] ** jnp.arange(self.action_dim)
-        digits = (idx[:, None] // powers[None, :]) % self.action_array.shape[0]
-        self.action_perms: jnp.ndarray = self.action_array[digits]
-        # TODO this does not scale very nicely
-        # TODO should I add the following to utils to standardise it? if it is okay to use
-
-    def action_convert(self,
-                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_perms[action.squeeze()] * self.max_control
-
-    def action_space(self) -> spaces.Discrete:
-        return spaces.Discrete(len(self.action_perms))
+    def action_space(self, params: EnvParams) -> spaces.Discrete:
+        return spaces.Discrete(len(params.action_perms))

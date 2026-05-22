@@ -22,11 +22,11 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    action_array: jnp.ndarray = struct.field(pytree_node=False, default=(jnp.array((0.0, 1.0, -1.0))))
-    dt: float = struct.field(pytree_node=False, default=0.1)
-    horizon: int = struct.field(pytree_node=False, default=25)
-    max_steps_in_ep: int = struct.field(pytree_node=False, default=500)
-    periodic_dim: jnp.ndarray = struct.field(pytree_node=False, default=jnp.array((0, 0, 1, 0)))  # TODO is this the best way?
+    action_array: jnp.ndarray = struct.field(False, default=(jnp.array((0.0, 1.0, -1.0))))
+    dt: float = struct.field(False, default=0.1)
+    horizon: int = struct.field(False, default=25)
+    max_steps_in_ep: int = struct.field(False, default=500)
+    periodic_dim: jnp.ndarray = struct.field(False, default=jnp.array((0, 0, 1, 0)))  # TODO is this the best way?
 
     gravity: float = 9.82
     mass_cart: float = 0.5  # 1.0
@@ -37,7 +37,7 @@ class EnvParams:
     force_mag: float = 10.0
 
     x_threshold: float = 2.0
-    maximum_x_threshold: float = struct.field(pytree_node=False, default=2.0)  # maximum to ensure correct scaling
+    maximum_x_threshold: float = struct.field(False, default=2.0)  # maximum to ensure correct scaling
     theta_threshold: float = 12 * 2 * jnp.pi / 360
 
     @property
