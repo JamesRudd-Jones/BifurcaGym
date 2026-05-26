@@ -9,9 +9,6 @@ import chex
 from bifurcagym.envs import utils
 
 
-jax.config.update("jax_enable_x64", True)
-
-
 @struct.dataclass
 class EnvState(base_env.EnvState):
     x: jnp.ndarray  # shape (3,)

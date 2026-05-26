@@ -5,7 +5,7 @@ Based off: https://github.com/fusion-ml/trajectory-information-rl/blob/main/barl
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 from flax import struct
 from bifurcagym.envs import base_env
@@ -22,12 +22,6 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    action_array: jnp.ndarray = struct.field(False, default=(jnp.array((0.0, 1.0, -1.0))))
-    dt: float = struct.field(False, default=0.1)
-    horizon: int = struct.field(False, default=25)
-    max_steps_in_ep: int = struct.field(False, default=500)
-    periodic_dim: jnp.ndarray = struct.field(False, default=jnp.array((0, 0, 1, 0)))  # TODO is this the best way?
-
     gravity: float = 9.82
     mass_cart: float = 0.5  # 1.0
     mass_pole: float = 0.5  # 0.1
@@ -52,6 +46,16 @@ class EnvParams:
 class CartPoleCSDA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.dt: float = 0.1
+        self.horizon: int = 25
+        self.max_steps_in_ep: int = 500
+
+        self.periodic_dim: chex.Array = jnp.array((0, 0, 1, 0))  # TODO is this the best way?
+
+        self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
+
+        self.requires_float64: bool = False
 
     @property
     def default_params(self) -> EnvParams:
@@ -90,16 +94,15 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         #                    self.mass_total * self.gravity * sintheta + 6 * (action - self.mu * state.x_dot) * costheta) /
         #                    (4 * self.length * self.mass_total - 3 * self.mass_pole_length * costheta ** 2))
 
-        x = state.x + state.x_dot * params.dt
-        unnorm_theta = state.theta + state.theta_dot * params.dt
+        x = state.x + state.x_dot * self.dt
+        unnorm_theta = state.theta + state.theta_dot * self.dt
         theta = self._angle_normalise(unnorm_theta)
-        x_dot = state.x_dot + xdot_update * params.dt
-        theta_dot = state.theta_dot + thetadot_update * params.dt
+        x_dot = state.x_dot + xdot_update * self.dt
+        theta_dot = state.theta_dot + thetadot_update * self.dt
 
         delta_s = jnp.array((x, x_dot, unnorm_theta, theta_dot)) - self.get_obs(state)
         # TODO check why this is unnorm theta
 
-        # Update state dict and evaluate termination conditions
         new_state = EnvState(x=x,
                              x_dot=x_dot,
                              theta=theta,
@@ -162,12 +165,12 @@ class CartPoleCSDA(base_env.BaseEnvironment):
 
         done = jnp.logical_or(done1, done2)
 
-        fin_done = jnp.logical_or(done, state_tp1.time >= params.max_steps_in_ep)
+        fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_ep)
 
         return -costs, fin_done
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        return params.action_array[action.squeeze()] * params.force_mag / 4
+        return self.action_array[action.squeeze()] * params.force_mag / 4
         # TODO need this 4 divisor to work for discrete actions
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
@@ -233,7 +236,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=thetas.shape[0],
-                                       interval=params.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")
@@ -244,17 +247,17 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         return "CartPole-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_array))
+        return spaces.Discrete(len(self.action_array))
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         high = jnp.array([params.maximum_x_threshold,
                           params.maximum_x_threshold,
                           3.14159,
                           25.0])
-        return spaces.Box(-high, high, (4,), dtype=jnp.float32)
+        return spaces.Box(-high, high, (4,))
 
     def reward_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-1, 0, (()), dtype=jnp.float32)
+        return spaces.Box(-1, 0, (()))
 
 
 class CartPoleCSCA(CartPoleCSDA):

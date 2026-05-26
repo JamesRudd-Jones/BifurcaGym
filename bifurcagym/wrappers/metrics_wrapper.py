@@ -3,14 +3,14 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from functools import partial
 import chex
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 from bifurcagym.envs import EnvState, EnvParams
 from flax import struct
 import dataclasses
 
 
 @struct.dataclass
-class MetricsEnvState:
+class MetricsEnvState(EnvState):
     env_state: EnvState
     episode_lengths: int
     episode_returns: float

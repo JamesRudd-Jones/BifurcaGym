@@ -12,9 +12,6 @@ import cmocean
 import numpy as np
 
 
-jax.config.update("jax_enable_x64", True)
-
-
 @struct.dataclass
 class EnvState(base_env.EnvState):
     f: jnp.ndarray

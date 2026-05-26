@@ -35,9 +35,9 @@ class EnvParams:
     random_start_low: chex.Array = jnp.array([-1.0, -1.0], dtype=jnp.float64)
     random_start_high: chex.Array = jnp.array([1.0, 1.0], dtype=jnp.float64)
 
-    # Precompute a fixed point (solve map(s) - s = 0)
-    self.fixed_point = self._compute_fixed_point()
-    # TODO how to do this idk
+    # # Precompute a fixed point (solve map(s) - s = 0)
+    # self.fixed_point = self._compute_fixed_point()
+    # # TODO how to do this idk
 
 
 

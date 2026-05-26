@@ -29,79 +29,25 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    fluid_dt: float = struct.field(False, default=0.2)
-    fluid_iterations: int = struct.field(False, default=20)  # Number of iterations for the linear solver
+    max_current: float = 0.2
+    current_noise_scale: float = 0.04
+    fluid_viscosity: float = 1e-6
+    fluid_force: float = 40.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
+    current_scaling_factor: float = 0.5  # Scales the effect of the current on the boat
 
-    self.length: float = 15.0
-    self.width: float = 15.0
+    density: float = 1.0
+    viscosity: float = 1e-3
+    max_velocity: float = 7.0
+    cfl_safety_factor: float = 0.5
 
-    self.max_current: float = 0.2
+    # self.goal_state = jnp.array((self.width, self.length))
+    #
+    # self.max_action: float = 1.0
+    # self.horizon: int = 200
 
-    self.current_noise_scale: float = 0.04
-
-    self.fluid_viscosity: float = 1e-6
-
-    self.fluid_force: float = 40.0  # 1.0  # 5.0  # Strength of the external force driving the fluid
-    self.current_scaling_factor: float = 0.5  # Scales the effect of the current on the boat
-
-    self.is_deterministic: bool = True
-    self.is_heteroskedastic: bool = False
-    self.is_non_stationary: bool = False
-    self.is_chaotic: bool = True
-    self.is_chaotic_new: bool = True  # TODO remvove all the old things as new is better although so compute intensive
-
-    if self.is_chaotic:
-        self.fluid_grid_size: int = 128  # 256
-    else:
-        self.fluid_grid_size: int = 1  # TODO think this is fine since it still applies the stochasticity?
-
-    self.fluid_grid_size_plot = 128  # 256
-
-    self.grid = grids.Grid((self.fluid_grid_size, self.fluid_grid_size), domain=((0, self.length), (0, self.width)))
-    self.density = 1.0
-    self.viscosity = 1e-3
-    self.max_velocity = 7
-    self.cfl_safety_factor = 0.5
-    self.dt = base.equations.stable_time_step(self.max_velocity, self.cfl_safety_factor, self.viscosity, self.grid)
-    self.inner_steps = 25
-
-    if self.is_non_stationary:
-        self.current_func = self.nonstationary_current_func
-        self.reset_func = self.nonstationary_reset_func
-    elif self.is_chaotic:
-        if self.is_chaotic_new:
-            self.current_func = self.chaotic_current_func_new
-            self.reset_func = self.chaotic_reset_func_new
-        else:
-            self.current_func = self.chaotic_current_func
-            self.reset_func = self.chaotic_reset_func
-    else:
-        self.current_func = self.stationary_current_func
-        self.reset_func = self.stationary_reset_func
-
-    if self.is_deterministic:
-        self.noise_func = self.no_noise
-        self.is_heteroskedastic = False  # TODO just ensures this for plot/file naming purposes
-    else:
-        if self.is_heteroskedastic:
-            self.noise_func = self.heteroskedastic_noise
-        else:
-            self.noise_func = self.homoskedastic_noise
-
-    self.goal_state = jnp.array((self.width, self.length))
-
-    self.max_action: float = 1.0
-    self.horizon: int = 200
-
-
-
-"""
-Deterministic - There is a constant current 
-Homoskedastic - There is a constant current with an applied noise term
-Heteroskedastic - There is a current with an applied noise term that is dependent on the state position
-Non-Stationary - The current changes over time, perhaps some sinusoidal with time
-Chaotic - Uses the fluid solver rather than some arbitrary thing we are using
-"""
+    @property
+    def dt(self):
+        return base.equations.stable_time_step(self.max_velocity, self.cfl_safety_factor, self.viscosity, self.grid)
 
 
 class BoatInCurrentCSCA(base_env.BaseEnvironment):
@@ -109,6 +55,61 @@ class BoatInCurrentCSCA(base_env.BaseEnvironment):
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        """
+        Deterministic - There is a constant current 
+        Homoskedastic - There is a constant current with an applied noise term
+        Heteroskedastic - There is a current with an applied noise term that is dependent on the state position
+        Non-Stationary - The current changes over time, perhaps some sinusoidal with time
+        Chaotic - Uses the fluid solver rather than some arbitrary thing we are using
+        """
+
+        fluid_dt: float = struct.field(False, default=0.2)
+        fluid_iterations: int = struct.field(False, default=20)  # Number of iterations for the linear solver
+        inner_steps: int = struct.field(False, default=25)
+
+        length: float = struct.field(False, default=15.0)
+        width: float = struct.field(False, default=15.0)
+
+        fluid_grid_size_plot: int = struct.field(False, default=128)  # 256
+
+        self.is_deterministic: bool = struct.field(False, default=True)
+        self.is_heteroskedastic: bool = struct.field(False, default=False)
+        self.is_non_stationary: bool = struct.field(False, default=False)
+        self.is_chaotic: bool = struct.field(False, default=True)
+        self.is_chaotic_new: bool = struct.field(False,
+                                            default=True)  # TODO remvove all the old things as new is better although so compute intensive
+
+        if self.is_chaotic:
+            self.fluid_grid_size: int = struct.field(False, default=128)  # 256
+        else:
+            self.fluid_grid_size: int = struct.field(False,
+                                                default=1)  # TODO think this is fine since it still applies the stochasticity?
+
+        self.grid = grids.Grid((self.fluid_grid_size, self.fluid_grid_size), domain=((0, self.length), (0, self.width)))
+
+        if self.is_non_stationary:
+            self.current_func = self.nonstationary_current_func
+            self.reset_func = self.nonstationary_reset_func
+        elif self.is_chaotic:
+            if self.is_chaotic_new:
+                self.current_func = self.chaotic_current_func_new
+                self.reset_func = self.chaotic_reset_func_new
+            else:
+                self.current_func = self.chaotic_current_func
+                self.reset_func = self.chaotic_reset_func
+        else:
+            self.current_func = self.stationary_current_func
+            self.reset_func = self.stationary_reset_func
+
+        if self.is_deterministic:
+            self.noise_func = self.no_noise
+            self.is_heteroskedastic = False  # TODO just ensures this for plot/file naming purposes
+        else:
+            if self.is_heteroskedastic:
+                self.noise_func = self.heteroskedastic_noise
+            else:
+                self.noise_func = self.homoskedastic_noise
 
     @property
     def default_params(self) -> EnvParams:

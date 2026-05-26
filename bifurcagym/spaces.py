@@ -3,6 +3,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import chex
 
+
 class Space:
     def sample(self, key: chex.Array) -> chex.Array:
         raise NotImplementedError

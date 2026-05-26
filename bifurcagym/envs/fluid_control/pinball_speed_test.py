@@ -4,9 +4,6 @@ import time
 import timeit
 
 
-jax.config.update("jax_enable_x64", True)
-
-
 def benchmark_jax_func(func, args, name, iterations=100):
     times = []
     results = []
