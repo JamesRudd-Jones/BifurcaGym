@@ -5,14 +5,12 @@ Based off: https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equatio
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 from flax import struct
-from pygments.styles import default
-
 from bifurcagym.envs import base_env
 from bifurcagym import spaces
-from functools import partial
+from pygments.styles import default
 
 
 @struct.dataclass
@@ -21,54 +19,51 @@ class EnvState(base_env.EnvState):
     x_dot: jnp.ndarray
     thetas: jnp.ndarray
     theta_dots: jnp.ndarray
-    time: int
 
 
 @struct.dataclass
 class EnvParams:
-    action_array: jnp.ndarray = struct.field(False, default=(jnp.array((0.0, 1.0, -1.0))))
-    dt: float = struct.field(False, default=0.1)
-    horizon: int = struct.field(False, default=25)
-    max_steps_in_ep: int = struct.field(False, default=500)
-    num_poles: int = struct.field(False, default=2)
-
     gravity: float = 9.82
     mass_cart: float = 0.5  # 1.0
     mu: float = 0.1  # friction coefficient
-
+    mass_poles: float = 0.5
+    lengths: float = 0.6
     force_mag: float = 10.0
 
-    mass_poles: chex.Array = None
-    lengths: chex.Array = None
-
-    # TODO is this really the best way of doing it?
-    def __post_init__(self):
-        if self.mass_poles is None:
-            object.__setattr__(self, 'mass_poles', jnp.ones(self.num_poles) * 0.5)
-
-        if self.lengths is None:
-            object.__setattr__(self, 'lengths', jnp.ones(self.num_poles) * 0.6)
-
-    @property
-    def periodic_dim(self) -> chex.Array:  # TODO is there a better way to do this?
-        return jnp.concatenate((jnp.zeros(2, ), jnp.tile(jnp.array((1, 0)), self.num_poles)))
-
-    @property
-    def mass_total(self) -> chex.Numeric:
-        return self.mass_cart + jnp.sum(self.mass_poles)
-
-    @property
-    def length_total(self) -> chex.Numeric:
-        return jnp.sum(self.lengths)
+    x_threshold: float = 2.0
+    maximum_x_threshold: float = struct.field(False, default=2.0)  # maximum to ensure correct scaling
 
 
 class NCartPoleCSDA(base_env.BaseEnvironment):
-    def __init__(self, **env_kwargs):
+    def __init__(self, num_poles: int = 2, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.dt: float = 0.1
+        self.horizon: int = 25
+        self.max_steps_in_ep: int = 500
+        self.num_poles: int = num_poles
+
+        self.periodic_dim: chex.Array = jnp.concatenate((jnp.zeros(2, ), jnp.tile(jnp.array((1, 0)), self.num_poles)))
+
+        self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
+
+        self.requires_float64: bool = True
 
     @property
     def default_params(self) -> EnvParams:
         return EnvParams()
+
+    def mass_poles(self, params: EnvParams) -> chex.Array:
+        return jnp.ones(self.num_poles) * params.mass_poles
+
+    def lengths(self, params) -> chex.Array:
+        return jnp.ones(self.num_poles) * params.lengths
+
+    def mass_total(self, params: EnvParams) -> chex.Numeric:
+        return params.mass_cart + jnp.sum(self.mass_poles(params))
+
+    def length_total(self, params) -> chex.Numeric:
+        return jnp.sum(self.lengths(params))
 
     def step_env(self,
                  input_action: chex.Numeric,
@@ -84,22 +79,22 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         xdot_term1 = -2 * jnp.sum(params.mass_poles * params.lengths * (state.theta_dots ** 2) * sinthetas)
         xdot_term2 = 3 * params.gravity * jnp.sum(params.mass_poles * sinthetas * costhetas)
         xdot_term3 = 4 * (action - params.mu * state.x_dot)
-        xdot_denom = 4 * params.mass_total - 3 * jnp.sum(params.mass_poles * costhetas ** 2)
+        xdot_denom = 4 * self.mass_total(params) - 3 * jnp.sum(params.mass_poles * costhetas ** 2)
 
         xdot_update = (xdot_term1 + xdot_term2 + xdot_term3) / xdot_denom
 
         thetadot_term1 = -3 * params.mass_poles * params.lengths * (state.theta_dots ** 2) * sinthetas * costhetas
-        thetadot_term2 = 6 * params.mass_total * params.gravity * sinthetas
+        thetadot_term2 = 6 * self.mass_total(params) * params.gravity * sinthetas
         thetadot_term3 = 6 * (action - params.mu * state.x_dot) * costhetas
-        thetadot_denom = 4 * params.lengths * params.mass_total - 3 * params.mass_poles * params.lengths * costhetas ** 2
+        thetadot_denom = 4 * params.lengths * self.mass_total(params) - 3 * params.mass_poles * params.lengths * costhetas ** 2
 
         thetadot_update = (thetadot_term1 + thetadot_term2 + thetadot_term3) / thetadot_denom
 
-        x = state.x + state.x_dot * params.dt
-        unnorm_thetas = state.thetas + state.theta_dots * params.dt
+        x = state.x + state.x_dot * self.dt
+        unnorm_thetas = state.thetas + state.theta_dots * self.dt
         thetas = jax.vmap(self._angle_normalise)(unnorm_thetas)
-        x_dot = state.x_dot + xdot_update * params.dt
-        theta_dots = state.theta_dots + thetadot_update * params.dt
+        x_dot = state.x_dot + xdot_update * self.dt
+        theta_dots = state.theta_dots + thetadot_update * self.dt
 
         # delta_s = jnp.array((x, x_dot, unnorm_thetas, theta_dots)) - self.get_obs(state)
         # TODO check why this is unnorm theta
@@ -135,10 +130,10 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         init_state_cart = jrandom.normal(key, shape=(2,)) * scale + loc
 
         key, _key = jrandom.split(key)
-        init_state_thetas = jrandom.normal(_key, shape=(params.num_poles,)) * 0.02 + jnp.pi
+        init_state_thetas = jrandom.normal(_key, shape=(self.num_poles,)) * 0.02 + jnp.pi
 
         key, _key = jrandom.split(key)
-        init_state_theta_dots = jrandom.normal(_key, shape=(params.num_poles,)) * 0.02 + 0.0
+        init_state_theta_dots = jrandom.normal(_key, shape=(self.num_poles,)) * 0.02 + 0.0
 
         state = EnvState(x=init_state_cart[0],
                          x_dot=init_state_cart[1],
@@ -154,17 +149,22 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                                  params: EnvParams,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
-        goal = jnp.array([0.0, params.length_total])
-        pendulum_x, pendulum_y = jax.vmap(self._get_coords)(state_tp1.thetas, params.lengths)
+        goal = jnp.array([0.0, self.length_total(params)])
+        pendulum_x, pendulum_y = jax.vmap(self._get_coords)(state_tp1.thetas, self.lengths(params))
         position = jnp.array([state_tp1.x + jnp.sum(pendulum_x), jnp.sum(pendulum_y)])
         squared_distance = jnp.sum((position - goal) ** 2)
         squared_sigma = 0.25 ** 2
         costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
 
-        return -costs, jnp.array(False)
+        done = jnp.logical_or(state_tp1.x < -params.x_threshold,  # TODO state_t or state_tp1
+                               state_tp1.x > params.x_threshold)
+
+        fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_ep)
+
+        return -costs, fin_done
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        return params.action_array[action.squeeze()] * params.force_mag / 4
+        return self.action_array[action.squeeze()] * params.force_mag / 4
         # TODO need this 4 divisor to work for discrete actions
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:  # TODO check this
@@ -179,8 +179,8 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
     def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:  # TODO check this
         return EnvState(x=obs[0],
                         x_dot=obs[1],
-                        thetas=jax.vmap(self._angle_normalise)(obs[2:params.num_poles+2]),
-                        theta_dots=obs[params.num_poles+2:],
+                        thetas=jax.vmap(self._angle_normalise)(obs[2:self.num_poles+2]),
+                        theta_dots=obs[self.num_poles+2:],
                         time=-1)
 
     def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
@@ -190,10 +190,10 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
 
         thetas = np.asarray(trajectory_state.thetas)
         xs = np.asarray(trajectory_state.x)
-        lengths = np.asarray(params.lengths)
+        lengths = np.asarray(jax.vmap(self.lengths)(params))
 
         fig, ax = plt.subplots(figsize=(5, 5))
-        ax.set_title(f"{self.name}-NumPoles={params.num_poles}")
+        ax.set_title(f"{self.name}-NumPoles={self.num_poles}")
         screen_lim = float(np.sum(np.max(lengths, axis=0)))  # TODO should maximum over the batch and then sum all length options
         ax.set_xlim(-screen_lim * 3, screen_lim * 3)
         ax.set_xlabel("X")
@@ -236,10 +236,10 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=thetas.shape[0],
-                                       interval=params.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
-        anim.save(f"{file_path}_{self.name}-NumPoles={params.num_poles}..gif")
+        anim.save(f"{file_path}_{self.name}-NumPoles={self.num_poles}..gif")
         plt.close()
 
     @property
@@ -247,13 +247,13 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         return "NCartPole-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_array))
+        return spaces.Discrete(len(self.action_array))
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         high = jnp.concatenate((jnp.array((10.0, 10.0)),
-                                jnp.tile(jnp.array((3.14159,)), params.num_poles),
-                                jnp.tile(jnp.array((25.0,)), params.num_poles)))
-        return spaces.Box(-high, high, (2 + params.num_poles,), dtype=jnp.float32)
+                                jnp.tile(jnp.array((3.14159,)), self.num_poles),
+                                jnp.tile(jnp.array((25.0,)), self.num_poles)))
+        return spaces.Box(-high, high, (2 + self.num_poles * 2,), dtype=jnp.float32)
 
 
 class NCartPoleCSCA(NCartPoleCSDA):

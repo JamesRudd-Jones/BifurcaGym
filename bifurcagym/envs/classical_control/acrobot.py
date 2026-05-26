@@ -37,22 +37,22 @@ class EnvParams:
     max_vel_2: float = 9 * jnp.pi
     maximum_max_vel_2: float = struct.field(False, default=9 * jnp.pi)  # maximum to ensure correct scaling
 
-    action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
     max_torque: float = 1.0
     maximum_max_torque: float = struct.field(False, default=1.0)  # maximum to ensure correct scaling
     torque_noise_max: float = 0.0
-
-    dt: float = 0.2
-
-    @property
-    def max_steps_in_ep(self) -> chex.Numeric:
-        return int(400 // self.dt)
 
 
 class AcrobotCSDA(base_env.BaseEnvironment):
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.dt: float = 0.2
+        self.max_steps_in_ep: int = int(400 // self.dt)
+
+        self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
+
+        self.requires_float64: bool = True
 
     @property
     def default_params(self) -> EnvParams:
@@ -72,15 +72,9 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                                           minval=-params.torque_noise_max,
                                           maxval=params.torque_noise_max)
 
-        # Augment state with force action so it can be passed to ds/dt
-        s_augmented = jnp.array([state.joint_angle_1,
-                                 state.joint_angle_2,
-                                 state.vel_1,
-                                 state.vel_2,
-                                 torque,
-                                 ])
+        s = jnp.array([state.joint_angle_1, state.joint_angle_2, state.vel_1, state.vel_2])
 
-        ns = utils.runge_kutta_4(s_augmented, self._dsdt, params.dt)
+        ns = utils.rk4_step(self._dsdt, s, torque, self.dt, params)
         joint_angle_1 = self._wrap(ns[0], -jnp.pi, jnp.pi)
         joint_angle_2 = self._wrap(ns[1], -jnp.pi, jnp.pi)
         vel_1 = jnp.clip(ns[2], -params.max_vel_1, params.max_vel_1)
@@ -103,15 +97,15 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                 {"discount": self.discount(done)},
                 )
 
-    def _dsdt(self, s_augmented: chex.Array, _: chex.Numeric) -> chex.Array:
+    def _dsdt(self, s: chex.Array, a: chex.Array, params: EnvParams) -> chex.Array:
         m1, m2 = params.mass_1, params.mass_2
         l1 = params.length_1
         lc1, lc2 = params.com_pos_1, params.com_pos_2
         i1, i2 = params.moi, params.moi
         g = 9.8
-        a = s_augmented[-1]
-        s = s_augmented[:-1]
+
         theta1, theta2, dtheta1, dtheta2 = s
+
         d1 = m1 * lc1 ** 2 + m2 * (l1 ** 2 + lc2 ** 2 + 2 * l1 * lc2 * jnp.cos(theta2)) + i1 + i2
         d2 = m2 * (lc2 ** 2 + l1 * lc2 * jnp.cos(theta2)) + i2
         phi2 = m2 * lc2 * g * jnp.cos(theta1 + theta2 - jnp.pi / 2.0)
@@ -124,7 +118,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                    ) / (m2 * lc2 ** 2 + i2 - d2 ** 2 / d1)
         ddtheta1 = -(d2 * ddtheta2 + phi1) / d1
 
-        return jnp.array([dtheta1, dtheta2, ddtheta1, ddtheta2, 0.0])
+        return jnp.array([dtheta1, dtheta2, ddtheta1, ddtheta2])
 
     @staticmethod
     def _wrap(x: chex.Numeric, m: chex.Numeric, big_m: chex.Numeric) -> chex.Array:
@@ -156,12 +150,12 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         done_angle = -jnp.cos(state_tp1.joint_angle_1) - jnp.cos(state_tp1.joint_angle_2 + state_tp1.joint_angle_1) > 1.0
         reward = -1.0 * (1 - done_angle)
 
-        time_done = jnp.array(state_tp1.time >= params.max_steps_in_ep)
+        time_done = jnp.array(state_tp1.time >= self.max_steps_in_ep)
 
         return reward, time_done
 
     def action_convert(self, action: chex.Numeric, params:EnvParams) -> chex.Numeric:
-        return params.action_array[action.squeeze()] * params.max_torque
+        return self.action_array[action.squeeze()] * params.max_torque
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array((jnp.cos(state.joint_angle_1),
@@ -185,6 +179,8 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
         angles_1 = np.asarray(trajectory_state.joint_angle_1)
         angles_2 = np.asarray(trajectory_state.joint_angle_2)
+        lengths_1 = np.asarray(params.length_1)
+        lengths_2 = np.asarray(params.length_2)
 
         def _get_coords(theta, length):
             return -length * np.sin(theta), length * np.cos(theta)
@@ -192,8 +188,8 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         fig, ax = plt.subplots(figsize=(5, 5))
         ax.set_title(self.name)
 
-        max_len_1 = np.max(params.length_1)
-        max_len_2 = np.max(params.length_2)
+        max_len_1 = np.max(lengths_1)
+        max_len_2 = np.max(lengths_2)
         screen_lim = max_len_1 + max_len_2
 
         ax.set_xlim(-screen_lim * 3, screen_lim * 3)
@@ -208,8 +204,8 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
         def update(frame):
 
-            x_1, y_1 = _get_coords(angles_1[frame], np.asarray(params.length_1[frame]))
-            x_2, y_2 = _get_coords(angles_2[frame], np.asarray(params.length_2[frame]))
+            x_1, y_1 = _get_coords(angles_1[frame], lengths_1[frame])
+            x_2, y_2 = _get_coords(angles_2[frame], lengths_2[frame])
 
             line.set_data([0.0, -x_1, -x_2-x_1], [0.0, -y_1, -y_2-y_1])
             dot.set_data([-x_1-x_2], [-y_1-y_2])
@@ -220,7 +216,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=angles_1.shape[0],
-                                       interval=params.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")
@@ -231,7 +227,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
         return "Acrobot-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_array))
+        return spaces.Discrete(len(self.action_array))
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         high = jnp.array([1.0,
@@ -241,9 +237,6 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                                   params.maximum_max_vel_1,
                                   params.maximum_max_vel_2], dtype=jnp.float64)
         return spaces.Box(-high, high, (6,), jnp.float64)
-
-    def reward_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-1, 0, (()), dtype=jnp.float64)
 
 
 class AcrobotCSCA(AcrobotCSDA):
@@ -267,15 +260,15 @@ class PendubotCSDA(AcrobotCSDA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-    def _dsdt(self, s_augmented: chex.Array, _: chex.Numeric) -> chex.Array:
+    def _dsdt(self, s: chex.Array, a: chex.Array, params: EnvParams) -> chex.Array:
         m1, m2 = params.mass_1, params.mass_2
         l1 = params.length_1
         lc1, lc2 = params.com_pos_1, params.com_pos_2
         i1, i2 = params.moi, params.moi
         g = 9.8
-        a = s_augmented[-1]
-        s = s_augmented[:-1]
+
         theta1, theta2, dtheta1, dtheta2 = s
+
         d1 = m1 * lc1 ** 2 + m2 * (l1 ** 2 + lc2 ** 2 + 2 * l1 * lc2 * jnp.cos(theta2)) + i1 + i2
         d2 = m2 * (lc2 ** 2 + l1 * lc2 * jnp.cos(theta2)) + i2
         phi2 = m2 * lc2 * g * jnp.cos(theta1 + theta2 - jnp.pi / 2.0)
@@ -288,7 +281,7 @@ class PendubotCSDA(AcrobotCSDA):
                    ) / (m2 * lc2 ** 2 + i2 - d2 ** 2 / d1)
         ddtheta1 = -(a + d2 * ddtheta2 + phi1) / d1
 
-        return jnp.array([dtheta1, dtheta2, ddtheta1, ddtheta2, 0.0])
+        return jnp.array([dtheta1, dtheta2, ddtheta1, ddtheta2])
 
     @property
     def name(self) -> str:

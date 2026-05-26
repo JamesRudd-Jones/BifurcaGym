@@ -18,15 +18,15 @@ class PeriodicEnv(object):
         return self._wrapped_periodic_env
 
     @partial(jax.jit, static_argnums=(0,))
-    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array) -> chex.Array:
-        shifted_output_og = (self._wrapped_periodic_env.apply_delta_obs(obs, delta_obs) -
-                             self._wrapped_periodic_env.observation_space().low)
-        obs_range = (self._wrapped_periodic_env.observation_space().high -
-                     self._wrapped_periodic_env.observation_space().low)
+    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array, params: EnvironmentError) -> chex.Array:
+        shifted_output_og = (self._wrapped_periodic_env.apply_delta_obs(obs, delta_obs, params) -
+                             self._wrapped_periodic_env.observation_space(params).low)
+        obs_range = (self._wrapped_periodic_env.observation_space(params).high -
+                     self._wrapped_periodic_env.observation_space(params).low)
         shifted_output = jnp.remainder(shifted_output_og, obs_range)
         modded_output = shifted_output_og + (self._wrapped_periodic_env.periodic_dim * shifted_output) - (
                     self._wrapped_periodic_env.periodic_dim * shifted_output_og)
-        wrapped_output = modded_output + self._wrapped_periodic_env.observation_space().low
+        wrapped_output = modded_output + self._wrapped_periodic_env.observation_space(params).low
 
         # TODO this adds in some error accumulation, can we avoid this?
 

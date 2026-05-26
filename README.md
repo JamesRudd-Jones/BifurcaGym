@@ -25,17 +25,18 @@ Further, each env must have a defined reward function that again is amenable to 
 
 BifurcaGym has the following environments currently:
 
-| Environment             |     State Space     |    Action Space     |                                                                                            Reference                                                                                             |
-|:------------------------|:-------------------:|:-------------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| Acrobot                 |     Continuous      | Discrete/Continuous |         [Code](https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_control/acrobot.py); [Paper](http://users.cms.caltech.edu/~murray/preprints/erl-M91-46.pdf)          |
-| Cartpole                |     Continuous      | Discrete/Continuous |                                      [Code](https://github.com/fusion-ml/trajectory-information-rl); [Paper](https://ieeexplore.ieee.org/document/6313077)                                       |
-| N Cartpole              |     Continuous      | Discrete/Continuous |                                                       [Info](https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html)                                                       |
-| Pendubot                |     Continuous      | Discrete/Continuous |                                        [Paper](https://link.springer.com/chapter/10.1007/BFb0015081); [Info](https://underactuated.mit.edu/acrobot.html)                                         |
-| Pendulum                |     Continuous      | Discrete/Continuous |                                                                  [Code](https://github.com/fusion-ml/trajectory-information-rl)                                                                  |
-| Wet Chicken             | Discrete/Continuous | Discrete/Continuous| [Code](https://github.com/LAVA-LAB/improved_spi/blob/main/wetChicken.py); [Paper](https://www.tu-ilmenau.de/fileadmin/Bereiche/IA/neurob/Publikationen/conferences_int/2009/Hans-ICANN-2009.pdf) |
-| 1D Kuramoto-Sivashinsky | Continuous | Continuous|                                                              [Paper](https://royalsocietypublishing.org/doi/10.1098/rspa.2019.0351)                                                              |
-| Logistic Map            | Discrete/Continuous | Discrete/Continuous |            [Info](https://blbadger.github.io/logistic-map.html#mjx-eqn-eq1); [Paper](https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement)            |
-| Tent Map                | Discrete/Continuous | Discrete/Continuous |                                                                          [Info](https://en.wikipedia.org/wiki/Tent_map)                                                                          |
+| Environment             |     State Space     |    Action Space     | Working |                                                                                            Reference                                                                                             |
+|:------------------------|:-------------------:|:-------------------:|:-------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| Acrobot                 |     Continuous      | Discrete/Continuous |    N    |         [Code](https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_control/acrobot.py); [Paper](http://users.cms.caltech.edu/~murray/preprints/erl-M91-46.pdf)          |
+| Cartpole                |     Continuous      | Discrete/Continuous |    Y    |                                      [Code](https://github.com/fusion-ml/trajectory-information-rl); [Paper](https://ieeexplore.ieee.org/document/6313077)                                       |
+| N Cartpole              |     Continuous      | Discrete/Continuous |    Y    |                                                       [Info](https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html)                                                       |
+| N Pendulum | Continuous | Discrete/Continuous|    N    |                                                                                                                                                                                                  |
+| Pendubot                |     Continuous      | Discrete/Continuous |    Y    |                                        [Paper](https://link.springer.com/chapter/10.1007/BFb0015081); [Info](https://underactuated.mit.edu/acrobot.html)                                         |
+| Pendulum                |     Continuous      | Discrete/Continuous |         |                                                                  [Code](https://github.com/fusion-ml/trajectory-information-rl)                                                                  |
+| Wet Chicken             | Discrete/Continuous | Discrete/Continuous|         | [Code](https://github.com/LAVA-LAB/improved_spi/blob/main/wetChicken.py); [Paper](https://www.tu-ilmenau.de/fileadmin/Bereiche/IA/neurob/Publikationen/conferences_int/2009/Hans-ICANN-2009.pdf) |
+| 1D Kuramoto-Sivashinsky | Continuous | Continuous|         |                                                              [Paper](https://royalsocietypublishing.org/doi/10.1098/rspa.2019.0351)                                                              |
+| Logistic Map            | Discrete/Continuous | Discrete/Continuous |         |            [Info](https://blbadger.github.io/logistic-map.html#mjx-eqn-eq1); [Paper](https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement)            |
+| Tent Map                | Discrete/Continuous | Discrete/Continuous |         |                                                                          [Info](https://en.wikipedia.org/wiki/Tent_map)                                                                          |
 
 
 
@@ -46,9 +47,8 @@ BifurcaGym has the following environments currently:
 # TODOs
 
 - Check why normalisation seems to affect results negatively
-- Get state only works for fully observable enbs, we need to verify why we need this, I think it is because of the 
+- Get state only works for fully observable envs, we need to verify why we need this, I think it is because of the 
 generative env, need to clarify this and find a workaround, is there a better way to do it?
-- Do we still want the reward space so that we can normalise rewards, can we really validate this?
 - Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
 - Create utils for certain env types, e.g. discrete time chaos may all share a projection func
@@ -60,13 +60,9 @@ rewards from the environment with rewards calculated from collected trajectories
 fairly easy to store and track random keys to that this would be possible if needed.
 
 Add the following envs:
-- N Link Pendulum
-- Bernoulli Map/Dyadic Map
-- LorenzXX
 - Mackey Glass
 - Van Der Pol Oscillator
 - Predator Prey / Lotka-Volterra
-- Henon Map
 - Kuramoto Oscillator
 - Three Body Problem
 - AYS IAM SARL

@@ -54,7 +54,7 @@ class BaseEnvironment(abc.ABC):
         return obs, state
 
     @partial(jax.jit, static_argnums=(0,))
-    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array) -> chex.Array:
+    def apply_delta_obs(self, obs: chex.Array, delta_obs: chex.Array, params: EnvParams) -> chex.Array:
         return obs + delta_obs
 
     def step_env(self,
@@ -98,7 +98,4 @@ class BaseEnvironment(abc.ABC):
         raise NotImplementedError
 
     def observation_space(self, params: EnvParams):
-        raise NotImplementedError
-
-    def reward_space(self, params: EnvParams):
         raise NotImplementedError

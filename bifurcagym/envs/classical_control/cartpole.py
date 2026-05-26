@@ -256,9 +256,6 @@ class CartPoleCSDA(base_env.BaseEnvironment):
                           25.0])
         return spaces.Box(-high, high, (4,))
 
-    def reward_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-1, 0, (()))
-
 
 class CartPoleCSCA(CartPoleCSDA):
     def __init__(self, **env_kwargs):

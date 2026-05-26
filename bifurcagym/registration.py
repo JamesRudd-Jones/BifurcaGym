@@ -34,11 +34,11 @@ from bifurcagym.wrappers import (AutoResetWrapper,
 
 
 def make(env_id: str,
-         cont_state=False,
-         cont_action=False,
-         normalised=False,
-         autoreset=False,
-         metrics=False,
+         cont_state: bool=False,
+         cont_action: bool=False,
+         normalised: bool=False,
+         autoreset: bool=False,
+         metrics: bool=False,
          **env_kwargs):
 
     if env_id not in registered_envs:

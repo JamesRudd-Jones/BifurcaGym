@@ -10,10 +10,10 @@ import itertools
 
 env_names = [
              # "Acrobot-v0",
-             "CartPole-v0",
+             # "CartPole-v0",
              # "NCartPole-v0",
              # "NPendulum-v0",
-             # "Pendubot-v0",
+             "Pendubot-v0",
              # "Pendulum-v0",
              # "WetChicken-v0",
              # "ABCFlow-v0",
@@ -32,10 +32,10 @@ env_names = [
              # "FluidicPinball-v0",
              # "BoatInCurrent-v0",
              ]
-# cont_state = [True, False]
-# cont_action = [True, False]
-cont_state = [True]#, False]
-cont_action = [True]#, False]
+cont_state = [True, False]
+cont_action = [True, False]
+# cont_state = [True]#, False]
+# cont_action = [True]#, False]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 

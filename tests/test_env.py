@@ -8,18 +8,24 @@ import time
 import itertools
 
 
+jax.config.update("jax_enable_x64", True)
+
+
 env_names = [
              # "Acrobot-v0",
-             "CartPole-v0",
+             # "CartPole-v0",
              # "NCartPole-v0",
-             # "Pendubot-v0",
+             # "NPendulum-v0",
+             "Pendubot-v0",
              # "Pendulum-v0",
              # "WetChicken-v0",
              # "ABCFlow-v0",
+             # "BickleyJetFlow-v0",
              # "Chua-v0",
              # "DoubleGyreFlow-v0",
-             #  "KS-v0",
+             # "KS-v0",
              # "Lorenz63-v0",
+             # "QuadrupleGyreFlow-v0",
              # "Rossler-v0",
              # "HenonMap-v0",
              # "IkedaMap-v0",
@@ -29,10 +35,10 @@ env_names = [
              # "FluidicPinball-v0",
              # "BoatInCurrent-v0",
              ]
-# cont_state = [True, False]
-# cont_action = [True, False]
-cont_state = [True]
-cont_action = [False]
+cont_state = [True, False]
+cont_action = [True, False]
+# cont_state = [True]
+# cont_action = [True]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 
@@ -146,38 +152,6 @@ class TestEnv:
             pytest.skip(f"Skipping test due to expected ValueError: {e}")
         except Exception as e:
             pytest.fail(f"Unexpected error during test_speed_scan for {env_name} with cont_state={cont_state}, cont_action={cont_action}: {e}")
-
-    def test_reward_space(self, env_name, cont_state, cont_action):
-        """Ensure all rewards fall within the defined reward space bounds."""
-        try:
-            key, _key = jrandom.split(self.key)
-            env, env_params = bifurcagym.make(env_name, cont_state=cont_state, cont_action=cont_action)
-            reward_space = env.reward_space(env_params)
-
-            def scan_step(carry, step_key):
-                state = carry
-                action_key, env_key = jrandom.split(step_key)
-                action = env.action_space(env_params).sample(action_key)
-                obs, delta_obs, next_state, reward, done, info = env.step(action, state, env_params, env_key)
-                return next_state, reward
-
-            @jax.jit
-            def rollout(start_state, keys):
-                _, rewards = jax.lax.scan(scan_step, start_state, keys)
-                return rewards
-
-            obs, initial_state = env.reset(env_params, _key)
-            scan_keys = jrandom.split(key, self.num_steps * 10)
-            rewards = rollout(initial_state, scan_keys)
-
-            # Assert all rewards are within bounds
-            assert jnp.all(rewards >= reward_space.low), f"Reward fell below reward_space.low of {reward_space.low}"
-            assert jnp.all(rewards <= reward_space.high), f"Reward exceeded reward_space.high of {reward_space.high}"
-
-        except ValueError as e:
-            pytest.skip(f"Skipping test due to expected ValueError: {e}")
-        except Exception as e:
-            pytest.fail(f"Unexpected error during test_reward_space: {e}")
 
     def test_x64_or_x32(self, env_name, cont_state, cont_action):
         try:
