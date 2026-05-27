@@ -1,27 +1,44 @@
 # BifurcaGym
 
-Chaotic transition dynamics are found in many natural processes such as fluids, weather, financial systems, ecology and even multi-agent systems.
+Chaotic transition dynamics are found in many natural processes such as fluids, weather, financial systems, ecology, and 
+even multi-agent systems.
 
-In many of these scenarios we want to learn behavioural policies towards a desired objective, such as in fluid control (e.g. fluid mixing, aerofoil optimisation), financial or ecosystem control (a stable desired equilibrium), weather model parameter optimisation, autonomous vehicle control under wind/current effects (e.g. underwater drones or sailboats).
+In many of these scenarios we want to learn behavioural policies towards a desired objective, such as in fluid control 
+(e.g. fluid mixing, aerofoil optimisation), financial or ecosystem control (a stable desired equilibrium), weather model 
+parameter optimisation, autonomous vehicle control under wind/current effects (e.g. underwater drones or sailboats).
 
-However, chaos has a huge impact on Reinforcement Learning or Optimal Control methods as we look to optimise for long horizon sequential tasks.
+However, chaos has a huge impact on Reinforcement Learning or Optimal Control methods as we look to optimise for long 
+horizon sequential tasks; under chaos trajectories exponentially diverge beyond Lyapunov time.
 
-Due to chaotic dynamics having sensitivity to initial conditions, it can be hard to ensure robustness and accuracy in prediction and control in these types of environments.
+Due to chaotic systems having sensitivity to initial conditions, it can be hard to ensure robustness and accuracy in 
+prediction and control in these types of environments.
 
-Bifurcagym is a collection of environments that experience chaos in their transition dynamics, so that practitioners and theorists can understand the impact chaos has on their algorithm design. 
+BifurcaGym is a collection of environments that experience chaos in their transition dynamics, so that practitioners and 
+theorists can understand the impact chaos has on their algorithm design. 
 
-Bifurcagym is written in Jax to gain the benefits of the enhanced Autodiff and acceleration potential not only for the non-linear environment dynamics (which many require extensive CFD/FEA/FEM solvers) but also in the reduction of overheads between the environment and the agent for Reinforcement Learning/Optimal Control. 
+BifurcaGym is written in Jax to gain the benefits of the enhanced Autodiff and acceleration potential, not only for the 
+non-linear environment dynamics (which many require extensive CFD/FEA/FEM solvers) but also in the reduction of 
+overheads between the environment and the agent for Reinforcement Learning/Optimal Control. 
 
 ## The Framework
 
-Since both Model-Based and Model-Free methods are typically used for these types of environments, we ensure that Bifurcagym environments are set up to provide the correct outputs and wrappers for both. For example outputs also contain delta obs (the change in observation between steps) as this is amenable for Model-Based setups. This also has a wrapper and a function called get_delta_obs that ensures correct periodicity is applied for certain environments if you are using a dynamics model to predict the transition change rather than just the next observation.
+Since both Model-Based and Model-Free methods are typically used for these types of environments, we ensure that 
+BifurcaGym environments are set up to provide the correct outputs and wrappers for both. For example outputs also 
+contain delta obs (the change in observation between steps) as this is amenable for Model-Based setups. There is also a 
+function called get_delta_obs that ensures correct periodicity is applied for certain environments if you are using a 
+dynamics model to predict the transition change rather than just the next observation.
 
-Environments can come in various discrete/continuous state and action space combinations, which can be easily selected when loading the environment. Wrappers are made for normalising state and action spaces as well as auto-resetting the environment to enable easy Jax based environment rollouts using jax.lax.scan. 
+Environments can come in various discrete/continuous state and action space combinations, which can be easily selected 
+when loading the environment. Wrappers are made for normalising state and action spaces as well as auto-resetting the 
+environment to enable easy Jax based environment rollouts using jax.lax.scan. 
 
-We also easily allow a generative step so that obs can be fed into the env, again useful for some Model-Based RL setups that utilise generative dynamics models.
-Obs that are fed in must match the scale (aka if normalised or not) compared to the environment output.
+We also easily allow a generative step so that observations can be fed into the env, again useful for some Model-Based 
+RL setups that utilise generative dynamics models.
+Observations that are fed in must match the scale (aka if normalised or not) compared to the environment output.
 
-Further, each env must have a defined reward function that again is amenable to Model-Based RL experiments where focus is placed on learning a transition function.
+Further, each env must have a defined reward function that again is amenable to Model-Based RL experiments where focus 
+is placed on learning a transition function. We combine the reward and done function as a seperate entity for faster
+computation as well as for using the reward function if we do not look to learn in when using Model-Based methods.
 
 BifurcaGym has the following environments currently:
 
@@ -57,11 +74,8 @@ BifurcaGym has the following environments currently:
 # TODOs
 
 - Check why normalisation seems to affect results negatively
-- Get state only works for fully observable envs, we need to verify why we need this, I think it is because of the 
-generative env, need to clarify this and find a workaround, is there a better way to do it?
 - Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing
 - Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
-- Create utils for certain env types, e.g. discrete time chaos may all share a projection func
 - The benefit is that rewards can easily be adjusted by the user. We have tried to keep it comprehensive in that reward 
 functions require the action taken (good for many control tasks where we want to minimise a control signal), the 
 original state, the transitioned to state (allows easy one step state comparison), plus the definition of a key if 

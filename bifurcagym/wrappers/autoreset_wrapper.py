@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from functools import partial
 import chex
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 from bifurcagym.envs import EnvState, EnvParams
 
 
