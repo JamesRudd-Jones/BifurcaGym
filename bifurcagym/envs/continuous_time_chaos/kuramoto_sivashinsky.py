@@ -2,14 +2,13 @@
 An env ported to Jax based off of the following work:
 https://royalsocietypublishing.org/doi/full/10.1098/rspa.2019.0351
 """
-import os
 import jax
 import jax.numpy as jnp
 import numpy as np
-from bifurcagym.envs import base_env
+from bifurcagym.envs import base_env, utils
 from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 from pathlib import Path
 import cmocean
@@ -22,83 +21,54 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    here = Path(__file__).resolve().parent
-    data_dir = here / "ks_files"
-
-    action_array: chex.Array = struct.field(False, default=jnp.array((0.0, 1.0, -1.0)))
-    action_dim: int = struct.field(False, default=4)
-    state_dim: int = struct.field(False, default=8)
-
-    dt: float = struct.field(False, default=0.05)
-
-    x: chex.Array = struct.field(False, default=jnp.array(np.loadtxt(data_dir / "x.dat")))  # select space discretisation of the target solution
-    U_bf: chex.Array = struct.field(False, default=jnp.array(np.loadtxt(data_dir / 'u2.dat')))  # select u1, u2 or u3 as target solution
-    N: int = struct.field(False, default=x.default.size)
-
-    reward_ball: float = struct.field(False, default=0.01)
-
-    L: int = struct.field(False, default=22)
-
     max_control: float = 0.1
     maximum_max_control: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling
 
-    sig: float = 0.4
 
-    def action_perms(self) -> chex.Array:
-        idx = jnp.arange(self.action_array.shape[0] ** self.action_dim)
-        powers = self.action_array.shape[0] ** jnp.arange(self.action_dim)
-        digits = (idx[:, None] // powers[None, :]) % self.action_array.shape[0]
-        return self.action_array[digits]
-        # TODO this does not scale very nicely
-        # TODO should I add the following to utils to standardise it? if it is okay to use
+class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
-    @property
-    def max_steps_in_ep(self) -> int:
-        return int(500 // self.dt)
+    def __init__(self, num_actions: int = 4, **env_kwargs):
+        super().__init__(**env_kwargs)
 
-    @property
-    def x_S(self) -> chex.Array:
-        return jnp.arange(self.N) * self.L / self.N
+        self.dt: float = 0.05
+        self.horizon: int = 25
+        self.max_steps_in_ep: int = int(500 // self.dt)
+        self.num_actions = num_actions
 
-    @property
-    def k_K(self) -> chex.Array:
-        return self.N * jnp.fft.fftfreq(self.N)[0:self.N // 2 + 1] * 2 * jnp.pi / self.L
+        self.action_array: chex.Array = utils.action_permutations_generation(self.num_actions)
 
-    @property
-    def ik_K(self) -> chex.Array:
-        return 1j * self.k_K  # spectral derivative operator
+        self.requires_float64: bool = True
 
-    @property
-    def lin_K(self) -> chex.Array:
-        return self.k_K ** 2 - self.k_K ** 4  # Fourier multipliers for linear term
+        self.reward_ball: float = 0.01
 
-    @property
-    def x_zero_A(self) -> chex.Array:
-        return self.x_S[-1] / self.action_dim * jnp.arange(0, self.action_dim)
+        here = Path(__file__).resolve().parent
+        self.data_dir = here / "ks_files"
 
-    @property
-    def gaus(self) -> chex.Array:
-        return 1 / (jnp.sqrt(2 * jnp.pi) * self.sig) * jnp.exp(-0.5 * ((self.x_S - self.x_S[self.x_S.size // 2]) / self.sig) ** 2)
+        x: chex.Array = jnp.array(np.loadtxt(self.data_dir / "x.dat"))  # select space discretisation of the target solution
+        self.U_bf: chex.Array = jnp.array(np.loadtxt(self.data_dir / 'u2.dat'))  # select u1, u2 or u3 as target solution
+        self.N: int = x.size
+        self.state_dim: int = 8
+        self.L: int = 22
+        self.sig: float = 0.4
 
-    @property
-    def B_SA(self) -> chex.Array:
+        self.x_S: chex.Array = jnp.arange(self.N) * self.L / self.N
+        self.k_K: chex.Array = self.N * jnp.fft.fftfreq(self.N)[0:self.N // 2 + 1] * 2 * jnp.pi / self.L
+        self.ik_K: chex.Array = 1j * self.k_K  # spectral derivative operator
+        self.lin_K: chex.Array = self.k_K ** 2 - self.k_K ** 4  # Fourier multipliers for linear term
+        self.x_zero_A: chex.Array = self.x_S[-1] / self.num_actions * jnp.arange(0, self.num_actions)
+        self.gaus: chex.Array = 1 / (jnp.sqrt(2 * jnp.pi) * self.sig) * jnp.exp(-0.5 * ((self.x_S - self.x_S[self.x_S.size // 2]) / self.sig) ** 2)
+
         def process_single(gaus, x_zero, x_S_center, dx):
             shift = jnp.floor(x_zero - x_S_center) / dx
             col = jnp.roll(gaus, shift.astype(int))
             col = col / jnp.max(col)
             return jnp.roll(col, 5)
 
-        return jax.vmap(process_single, in_axes=(None, 0, None, None))(self.gaus,
-                                                                       self.x_zero_A,
-                                                                       self.x_S[self.x_S.size // 2],
-                                                                       self.x_S[1] - self.x_S[0],
-                                                                       ).T
-
-
-class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
-
-    def __init__(self, **env_kwargs):
-        super().__init__(**env_kwargs)
+        self.B_SA: chex.Array = jax.vmap(process_single, in_axes=(None, 0, None, None))(self.gaus,
+                                                                           self.x_zero_A,
+                                                                           self.x_S[self.x_S.size // 2],
+                                                                           self.x_S[1] - self.x_S[0],
+                                                                           ).T
 
     @property
     def default_params(self) -> EnvParams:
@@ -113,7 +83,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         action = self.action_convert(input_action, params)
 
         # forcing shape
-        dum_SA = params.B_SA * action.T  # TODO check this transpose
+        dum_SA = self.B_SA * action.T  # TODO check this transpose
         f0_S = jnp.sum(dum_SA, axis=-1)
 
         # semi-implicit third-order runge kutta update.
@@ -124,9 +94,9 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         def _runge_kutta_update(runner, unused):
             u_K, ind = runner
-            dt = params.dt / (3 - ind)
-            u_K = u_save_K + dt * self.nlterm(u_K, f_K, params)
-            u_K = (u_K + 0.5 * params.lin_K * dt * u_save_K) / (1. - 0.5 * params.lin_K * dt)
+            dt = self.dt / (3 - ind)
+            u_K = u_save_K + dt * self.nlterm(u_K, f_K)
+            u_K = (u_K + 0.5 * self.lin_K * dt * u_save_K) / (1. - 0.5 * self.lin_K * dt)
 
             ind += 1
 
@@ -146,16 +116,16 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                 done,
                 {})
 
-    def nlterm(self, u, f, params):
+    def nlterm(self, u, f):
         # compute tendency from nonlinear term. advection + forcing
         ur = jnp.fft.irfft(u, axis=-1)
-        return -0.5 * params.ik_K * jnp.fft.rfft(ur ** 2, axis=-1) + f
+        return -0.5 * self.ik_K * jnp.fft.rfft(ur ** 2, axis=-1) + f
 
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        u_S = jnp.array(np.loadtxt(params.data_dir / 'u3.dat'))
+        u_S = jnp.array(np.loadtxt(self.data_dir / 'u3.dat'))
         state = EnvState(u=u_S, time=0)
 
-        return self.get_obs(state, params), state
+        return self.get_obs(state), state
 
     def reward_and_done_function(self,
                                  input_action_t: chex.Numeric,
@@ -164,12 +134,12 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                                  params: EnvParams,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
-        reward = -jnp.linalg.norm(state_tp1.u - params.U_bf)
+        reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
 
-        state_done = jax.lax.select(jnp.linalg.norm(state_tp1.u - params.U_bf) < params.reward_ball,
+        state_done = jax.lax.select(jnp.linalg.norm(state_tp1.u - self.U_bf) < self.reward_ball,
                                     jnp.array(True),
                                     jnp.array(False))
-        time_done = jax.lax.select(state_tp1.time >= params.max_steps_in_ep,
+        time_done = jax.lax.select(state_tp1.time >= self.max_steps_in_ep,
                                    jnp.array(True),
                                    jnp.array(False))
         done = jnp.logical_or(state_done, time_done)
@@ -180,7 +150,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         return jnp.clip(action, -params.max_control, params.max_control)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None):
-        return state.u[5::params.x_S.shape[0] // params.state_dim]  # TODO sort this out in a better way
+        return state.u[5::self.x_S.shape[0] // self.state_dim]
 
     def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:
         return EnvState(u=obs[0], time=-1)
@@ -233,7 +203,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=len(times),
-                                       interval=params.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")
@@ -259,11 +229,11 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         return "KS-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, (params.action_dim,), dtype=jnp.float64)
+        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, (self.num_actions,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         high = 10  # TODO unsure of actual size should check
-        return spaces.Box(-high, high, (params.state_dim,), dtype=jnp.float64)
+        return spaces.Box(-high, high, (self.state_dim,), dtype=jnp.float64)
 
 
 class KuramotoSivashinskyCSDA(KuramotoSivashinskyCSCA):
@@ -271,7 +241,7 @@ class KuramotoSivashinskyCSDA(KuramotoSivashinskyCSCA):
         super().__init__(**env_kwargs)
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        return params.action_perms[action.squeeze()] * params.max_control
+        return self.action_array[action.squeeze()] * params.max_control
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_perms))
+        return spaces.Discrete(len(self.action_array))

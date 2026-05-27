@@ -17,13 +17,6 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    horizon: int = struct.field(False, default=200)
-    max_steps_in_ep: int = struct.field(False, default=2000)
-
-    start_point: chex.Array = struct.field(False, default=jnp.array([0.1, 0.1], dtype=jnp.float64))
-    random_start: bool = struct.field(False, default=True)
-    reward_ball: float = struct.field(False, default=0.001)
-
     a: float = 0.9
     b: float = -0.6013
     c: float = 2.0
@@ -32,34 +25,42 @@ class EnvParams:
     max_control: float = 0.05  # perturbation to a
     maximum_max_control: float = struct.field(False, default=0.05)  # maximum to ensure correct scaling
 
-    random_start_low: chex.Array = jnp.array([-1.0, -1.0], dtype=jnp.float64)
-    random_start_high: chex.Array = jnp.array([1.0, 1.0], dtype=jnp.float64)
-
-    # # Precompute a fixed point (solve map(s) - s = 0)
-    # self.fixed_point = self._compute_fixed_point()
-    # # TODO how to do this idk
-
-
 
 class TinkerbellMapCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.horizon: int = 200
+        self.max_steps_in_ep: int = 2000
+
+        self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
+
+        self.requires_float64: bool = True
+
+        self.start_point: chex.Array = jnp.array([0.1, 0.1], dtype=jnp.float64)
+        self.random_start: bool = True
+        self.random_start_low: chex.Array = jnp.array([-1.0, -1.0], dtype=jnp.float64)
+        self.random_start_high: chex.Array = jnp.array([1.0, 1.0], dtype=jnp.float64)
+        self.reward_ball: float = 0.001
+        # Precompute a fixed point (solve map(s) - s = 0)
+        self.fixed_point = self._compute_fixed_point()
 
     @property
     def default_params(self) -> EnvParams:
         return EnvParams()
 
     def step_env(self,
-                 input_action: Union[jnp.int_, jnp.float_, chex.Array],
+                 input_action: chex.Numeric,
                  state: EnvState,
+                 params: EnvParams,
                  key: chex.PRNGKey,
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        action = self.action_convert(input_action)
+        action = self.action_convert(input_action, params)
 
         new_xy = self._map(jnp.array((state.x, state.y)), action)
         new_state = EnvState(x=new_xy[0], y=new_xy[1], time=state.time + 1)
 
-        reward, done = self.reward_and_done_function(input_action, state, new_state, key)
+        reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
         obs_new = self.get_obs(new_state)
         obs_old = self.get_obs(state)

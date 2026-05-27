@@ -16,7 +16,7 @@ env_names = [
              # "CartPole-v0",
              # "NCartPole-v0",
              # "NPendulum-v0",
-             "Pendubot-v0",
+             # "Pendubot-v0",
              # "Pendulum-v0",
              # "WetChicken-v0",
              # "ABCFlow-v0",
@@ -30,15 +30,15 @@ env_names = [
              # "HenonMap-v0",
              # "IkedaMap-v0",
              # "LogisticMap-v0",
-             # "TentMap-v0",
+             "TentMap-v0",
              # "TinkerbellMap-v0",
              # "FluidicPinball-v0",
              # "BoatInCurrent-v0",
              ]
-cont_state = [True, False]
-cont_action = [True, False]
-# cont_state = [True]
-# cont_action = [True]
+# cont_state = [True, False]
+# cont_action = [True, False]
+cont_state = [True]
+cont_action = [True]
 
 all_combinations = list(itertools.product(env_names, cont_state, cont_action))
 

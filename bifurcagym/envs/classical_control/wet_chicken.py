@@ -10,7 +10,7 @@ import jax.random as jrandom
 from bifurcagym.envs import base_env
 from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 
 
@@ -22,17 +22,6 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    action_array: chex.Array = struct.field(False, default=jnp.array(((0.0, 0.0),  # Drift
-                                                                                  (0.0, -1.0),  # Hold
-                                                                                  (0.0, -2.0),  # Paddle back
-                                                                                  (1.0, 0.0),  # Right
-                                                                                  (-1.0, 0.0),  # Left
-                                                                                  )))
-    horizon: int = struct.field(False, default=200)
-
-    length: float = struct.field(False, default=5.0)
-    width: float = struct.field(False, default=5.0)
-
     max_turbulence: float = 3.5
     turbulence_noise: float = 1.0
     max_velocity: float = 3.0
@@ -43,8 +32,22 @@ class EnvParams:
 
 class WetChickenCSCA(base_env.BaseEnvironment):
 
-    def __init__(self, **env_kwargs):
+    def __init__(self, length: float = 5.0, width: float = 5.0, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.horizon: int = 200
+        self.max_steps_in_ep: int = 500
+        self.length: float = length
+        self.width: float = width
+
+        self.action_array: chex.Array = jnp.array(((0.0, 0.0),  # Drift
+                                                                (0.0, -1.0),  # Hold
+                                                                (0.0, -2.0),  # Paddle back
+                                                                (1.0, 0.0),  # Right
+                                                                (-1.0, 0.0),  # Left
+                                                                ))
+
+        self.requires_float64: bool = False
 
     @property
     def default_params(self) -> EnvParams:
@@ -68,8 +71,8 @@ class WetChickenCSCA(base_env.BaseEnvironment):
         # else:
         #     x_new = x_hat
 
-        x_new_cond1 = jnp.where(x_hat >= params.width, params.width, x_hat)
-        x_new = jnp.where(jnp.logical_or(y_hat >= params.length, x_hat < 0), 0.0, x_new_cond1)
+        x_new_cond1 = jnp.where(x_hat >= self.width, self.width, x_hat)
+        x_new = jnp.where(jnp.logical_or(y_hat >= self.length, x_hat < 0), 0.0, x_new_cond1)
 
         # if y_hat >= self.length:
         #     y_new = 0
@@ -78,7 +81,7 @@ class WetChickenCSCA(base_env.BaseEnvironment):
         # else:
         #     y_new = y_hat
 
-        y_new = jnp.where(jnp.logical_or(y_hat >= params.length, y_hat < 0.0), 0.0, y_hat)
+        y_new = jnp.where(jnp.logical_or(y_hat >= self.length, y_hat < 0.0), 0.0, y_hat)
 
         new_state = EnvState(x=x_new, y=y_new, time=state.time+1)
 
@@ -92,12 +95,12 @@ class WetChickenCSCA(base_env.BaseEnvironment):
                 {})
 
     def _velocity(self, state: EnvState, params: EnvParams) -> chex.Array:
-        return params.max_velocity * state.x / params.width
+        return params.max_velocity * state.x / self.width
 
     def _turbulence(self, state: EnvState, params: EnvParams, key: chex.PRNGKey) -> chex.Array:
         return (params.max_turbulence - self._velocity(state, params)) * jrandom.uniform(key,
-                                                                                        minval=-params.turbulence_noise,
-                                                                                        maxval=params.turbulence_noise)
+                                                                                         minval=-params.turbulence_noise,
+                                                                                         maxval=params.turbulence_noise)
 
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         state = EnvState(x=jnp.zeros(()),
@@ -113,8 +116,8 @@ class WetChickenCSCA(base_env.BaseEnvironment):
                                  params: EnvParams,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
-        done = jnp.array(False)  # a continuous task as the environment auto resets as part of the setup
-        return -(params.length - state_tp1.y), done
+        done = state_tp1.time >= self.max_steps_in_ep
+        return -(self.length - state_tp1.y), done
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
         return jnp.clip(action, -params.max_action, params.max_action)
@@ -131,12 +134,12 @@ class WetChickenCSCA(base_env.BaseEnvironment):
         import numpy as np
 
         grid_resolution = 50
-        x_grid = np.linspace(0, params.width, grid_resolution)
-        y_grid = np.linspace(0, params.length, grid_resolution)
+        x_grid = np.linspace(0, self.width, grid_resolution)
+        y_grid = np.linspace(0, self.length, grid_resolution)
         X, Y = np.meshgrid(x_grid, y_grid)
 
-        vx_grid = np.linspace(0, params.width, 8)
-        vy_grid = np.linspace(0, params.length, 6)
+        vx_grid = np.linspace(0, self.width, 8)
+        vy_grid = np.linspace(0, self.length, 6)
         VX, VY = np.meshgrid(vx_grid, vy_grid)
 
         xs = np.asarray(trajectory_state.x)
@@ -162,12 +165,12 @@ class WetChickenCSCA(base_env.BaseEnvironment):
 
         fig, ax = plt.subplots(figsize=(7, 5))
         ax.set_title(self.name)
-        ax.set_xlim(0, params.width)
+        ax.set_xlim(0, self.width)
         ax.set_xlabel("X")
-        ax.set_ylim(0, params.length)
+        ax.set_ylim(0, self.length)
         ax.set_ylabel("Y")
         ax.set_aspect('equal')
-        ax.axhline(y=params.length, color="blue", label="Waterfall", linewidth=5)
+        ax.axhline(y=self.length, color="blue", label="Waterfall", linewidth=5)
         ax.legend(bbox_to_anchor=(1.4, 1.03))
         ax.grid(True)
 
@@ -231,11 +234,8 @@ class WetChickenCSCA(base_env.BaseEnvironment):
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         low = jnp.array([0, 0])
-        high = jnp.array([params.width, params.length])
+        high = jnp.array([self.width, self.length])
         return spaces.Box(low, high, (2,))
-
-    def reward_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-params.length, 0, (()), dtype=jnp.float32)
 
 
 class WetChickenCSDA(WetChickenCSCA):
@@ -243,10 +243,10 @@ class WetChickenCSDA(WetChickenCSCA):
         super().__init__(**env_kwargs)
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        return params.action_array[action.squeeze()]
+        return self.action_array[action.squeeze()]
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_array))
+        return spaces.Discrete(len(self.action_array))
 
 
 class WetChickenDSDA(WetChickenCSDA):
@@ -292,7 +292,7 @@ class WetChickenDSDA(WetChickenCSDA):
         return EnvState(x=x.squeeze(), y=y.squeeze(), time=-1)
 
     def observation_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(int(params.width * params.length))
+        return spaces.Discrete(int(self.width * self.length))
 
 
 def plot_some_stuff():

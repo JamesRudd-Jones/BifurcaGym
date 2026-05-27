@@ -1,10 +1,10 @@
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from bifurcagym.envs import base_env
+from bifurcagym.envs import base_env, utils
 from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 import cmocean
 
@@ -17,21 +17,6 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    # TODO do we need float 64?
-    action_array: chex.Array = struct.field(False, default=jnp.array(((0.0, 0.0),
-                                                                      (-1.0, 0.0),
-                                                                      (-1.0, -1.0),
-                                                                      (0.0, -1.0),
-                                                                      (1.0, 0.0),
-                                                                      (1.0, 1.0),
-                                                                      (0.0, 1.0),
-                                                                      )))
-    dt: float = struct.field(False, default=0.1)
-
-    x_bounds: chex.Array = struct.field(False, default=jnp.array((0.0, 4.0 * jnp.pi)))
-    y_bounds: chex.Array = struct.field(False, default=jnp.array((-3.0, 3.0)))
-    goal_state: chex.Array = struct.field(False, default=jnp.array((6.0, -2.0)))
-
     U0: float = 0.6266
     L: float = 1.0
 
@@ -42,10 +27,6 @@ class EnvParams:
     maximum_max_speed: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling
 
     @property
-    def x_len(self) -> chex.Array:
-        return self.x_bounds[1] - self.x_bounds[0]
-
-    @property
     def c(self) -> chex.Array:
         return jnp.array([0.1446, 0.205, 0.461]) * self.U0
 
@@ -54,6 +35,26 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.dt: float = 0.1
+        self.horizon: int = 25
+        self.max_steps_in_ep: int = 500
+
+        self.action_array: chex.Array = jnp.array(((0.0, 0.0),
+                                                   (-1.0, 0.0),
+                                                   (-1.0, -1.0),
+                                                   (0.0, -1.0),
+                                                   (1.0, 0.0),
+                                                   (1.0, 1.0),
+                                                   (0.0, 1.0),
+                                                   ))
+
+        self.requires_float64: bool = True
+
+        self.x_bounds: chex.Array = jnp.array((0.0, 4.0 * jnp.pi))
+        self.y_bounds: chex.Array = jnp.array((-3.0, 3.0))
+        self.goal_state: chex.Array = jnp.array((6.0, -2.0))
+        self.x_len: chex.Array = self.x_bounds[1] - self.x_bounds[0]
 
     @property
     def default_params(self) -> EnvParams:
@@ -67,14 +68,20 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)  # Action is vx and vy of swimmer
 
-        u_flow, v_flow = self._get_flow_velocity(state.x, state.y, state.time * params.dt, params)
+        state_arr = jnp.array((state.x, state.y))
 
-        new_x = state.x + (u_flow + action[0]) * params.dt  # Euler integration for now
-        new_y = state.y + (v_flow + action[1]) * params.dt
+        def dynamics(t_curr, x_arr, u_arr, p):
+            u_flow, v_flow = self._get_flow_velocity(x_arr[0], x_arr[1], t_curr, p)
+            return jnp.array((u_flow + u_arr[0], v_flow + u_arr[1]))
+
+        new_state_arr = utils.rk4_step(dynamics, state.time * self.dt, state_arr, action, self.dt, params)
+
+        new_x = new_state_arr[0]
+        new_y = new_state_arr[1]
 
         # Handle Boundaries:
-        new_x = new_x % params.x_len  # X is Periodic
-        new_y = jnp.clip(new_y, params.y_bounds[0], params.y_bounds[1])
+        new_x = new_x % self.x_len  # X is Periodic
+        new_y = jnp.clip(new_y, self.y_bounds[0], self.y_bounds[1])
 
         new_state = EnvState(x=new_x, y=new_y, time=state.time+1)
 
@@ -130,7 +137,7 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
 
-        start_x = jrandom.uniform(key, minval=0.5, maxval=params.x_bounds[1] - 0.5)
+        start_x = jrandom.uniform(key, minval=0.5, maxval=self.x_bounds[1] - 0.5)
         start_y = jrandom.uniform(_key, minval=1.5, maxval=2.5)
 
         state = EnvState(x=start_x, y=start_y, time=0)
@@ -146,9 +153,9 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
                                  ) -> Tuple[chex.Array, chex.Array]:
         # Standard distance metric with periodic adjustment for X?
         # For simplicity assume standard Euclidean, but strict periodicity usually requires dx = min(|x1-x2|, L - |x1-x2|).
-        dx = jnp.abs(state_t.x - params.goal_state[0])
-        dx = jnp.minimum(dx, params.x_len - dx)  # Periodic distance
-        dy = state_t.y - params.goal_state[1]
+        dx = jnp.abs(state_t.x - self.goal_state[0])
+        dx = jnp.minimum(dx, self.x_len - dx)  # Periodic distance
+        dy = state_t.y - self.goal_state[1]
 
         dist_to_target = jnp.sqrt(dx ** 2 + dy ** 2)
 
@@ -181,24 +188,24 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
         ys = np.asarray(trajectory_state.y)
 
         fluid_grid_size_plot = 101
-        x_fine = np.linspace(0, params.x_bounds[1], fluid_grid_size_plot)
-        y_fine = np.linspace(0, params.y_bounds[1], fluid_grid_size_plot)
+        x_fine = np.linspace(0, self.x_bounds[1], fluid_grid_size_plot)
+        y_fine = np.linspace(0, self.y_bounds[1], fluid_grid_size_plot)
         X_fine, Y_fine = np.meshgrid(x_fine, y_fine)
 
         coarse_res = 15  # 25
-        x_coarse = np.linspace(0, params.x_bounds[1], coarse_res)
-        y_coarse = np.linspace(0, params.y_bounds[1], coarse_res)
+        x_coarse = np.linspace(0, self.x_bounds[1], coarse_res)
+        y_coarse = np.linspace(0, self.y_bounds[1], coarse_res)
         X_coarse, Y_coarse = np.meshgrid(x_coarse, y_coarse)
 
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.set_title(self.name)
-        ax.set_xlim(float(params.x_bounds[0]), float(params.x_bounds[1]))
-        ax.set_ylim(float(params.y_bounds[0]), float(params.y_bounds[1]))
+        ax.set_xlim(float(self.x_bounds[0]), float(self.x_bounds[1]))
+        ax.set_ylim(float(self.y_bounds[0]), float(self.y_bounds[1]))
         ax.set_xlabel("X Position")
         ax.set_ylabel("Y Position")
         ax.set_aspect('equal', adjustable='box')
 
-        ax.plot(params.goal_state[0], params.goal_state[1], marker='*', markersize=15, color="gold", label="Goal State",
+        ax.plot(self.goal_state[0], self.goal_state[1], marker='*', markersize=15, color="gold", label="Goal State",
                 zorder=4)
         ax.grid(True, linestyle='--', alpha=0.3, zorder=0)
 
@@ -209,8 +216,8 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
         def get_curr_param(params, time_idx):
             return jax.tree.map(lambda x: x[time_idx] if getattr(x, 'ndim', 0) > 0 else x, params)
 
-        initial_U_coarse, initial_V_coarse = get_flow_vel(X_coarse, Y_coarse, times[0] * params.dt, get_curr_param(params, 0))
-        initial_U_fine, initial_V_fine = get_flow_vel(X_fine, Y_fine, times[0] * params.dt, get_curr_param(params, 0))
+        initial_U_coarse, initial_V_coarse = get_flow_vel(X_coarse, Y_coarse, times[0] * self.dt, get_curr_param(params, 0))
+        initial_U_fine, initial_V_fine = get_flow_vel(X_fine, Y_fine, times[0] * self.dt, get_curr_param(params, 0))
         speed0 = np.sqrt(initial_U_fine ** 2 + initial_V_fine ** 2)
 
         # Setup animation elements
@@ -237,8 +244,8 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
             line.set_data(agent_path_x, agent_path_y)
             dot.set_data([xs[frame]], [ys[frame]])
 
-            U_coarse, V_coarse = get_flow_vel(X_coarse, Y_coarse, times[frame] * params.dt, get_curr_param(params, frame))
-            U_fine, V_fine = get_flow_vel(X_fine, Y_fine, times[frame] * params.dt, get_curr_param(params, frame))
+            U_coarse, V_coarse = get_flow_vel(X_coarse, Y_coarse, times[frame] * self.dt, get_curr_param(params, frame))
+            U_fine, V_fine = get_flow_vel(X_fine, Y_fine, times[frame] * self.dt, get_curr_param(params, frame))
             speed = jnp.sqrt(U_fine ** 2 + V_fine ** 2)
             pcm.set_array(speed.ravel())
 
@@ -271,7 +278,7 @@ class BickleyJetFlowCSDA(BickleyJetFlowCSCA):
         super().__init__(**env_kwargs)
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        return params.action_array[action.squeeze()] * params.max_speed
+        return self.action_array[action.squeeze()] * params.max_speed
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_array))
+        return spaces.Discrete(len(self.action_array))

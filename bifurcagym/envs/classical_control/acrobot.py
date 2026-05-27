@@ -74,7 +74,8 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
         s = jnp.array([state.joint_angle_1, state.joint_angle_2, state.vel_1, state.vel_2])
 
-        ns = utils.rk4_step(self._dsdt, s, torque, self.dt, params)
+        ns = utils.rk4_step(self._dsdt, state.time * self.dt, s, torque, self.dt, params)
+
         joint_angle_1 = self._wrap(ns[0], -jnp.pi, jnp.pi)
         joint_angle_2 = self._wrap(ns[1], -jnp.pi, jnp.pi)
         vel_1 = jnp.clip(ns[2], -params.max_vel_1, params.max_vel_1)
@@ -97,7 +98,7 @@ class AcrobotCSDA(base_env.BaseEnvironment):
                 {"discount": self.discount(done)},
                 )
 
-    def _dsdt(self, s: chex.Array, a: chex.Array, params: EnvParams) -> chex.Array:
+    def _dsdt(self, t: float, s: chex.Array, a: chex.Array, params: EnvParams) -> chex.Array:
         m1, m2 = params.mass_1, params.mass_2
         l1 = params.length_1
         lc1, lc2 = params.com_pos_1, params.com_pos_2
@@ -260,7 +261,7 @@ class PendubotCSDA(AcrobotCSDA):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
-    def _dsdt(self, s: chex.Array, a: chex.Array, params: EnvParams) -> chex.Array:
+    def _dsdt(self, t: float, s: chex.Array, a: chex.Array, params: EnvParams) -> chex.Array:
         m1, m2 = params.mass_1, params.mass_2
         l1 = params.length_1
         lc1, lc2 = params.com_pos_1, params.com_pos_2

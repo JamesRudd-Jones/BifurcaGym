@@ -16,37 +16,12 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    action_array: chex.Array = struct.field(False, default=jnp.array((0.0, 1.0, -1.0)))
-    dt: float = struct.field(False, default=0.02)
-    horizon: int = struct.field(False, default=200)
-    substeps: int = struct.field(False, default=5)
-
-    num_actions: int = struct.field(False, default=3)
-    start_point: chex.Array = struct.field(False, default=jnp.array([0.1, 0.0, 0.0], dtype=jnp.float64))
-    random_start: bool = struct.field(False, default=False)
-    reward_ball: float = struct.field(False, default=1e-2)
-
     a: float = 0.2
     b: float = 0.2
     c: float = 5.7
 
     max_control: chex.Array = jnp.array((0.01, 0.01, 1.0))
     maximum_max_control: chex.Array = struct.field(False, default=jnp.array((0.01, 0.01, 1.0)))  # maximum to ensure correct scaling
-
-    random_start_low: chex.Array = jnp.array([-5.0, -5.0, 0.0], dtype=jnp.float64)
-    random_start_high: chex.Array = jnp.array([5.0, 5.0, 10.0], dtype=jnp.float64)
-
-    def action_perms(self) -> chex.Array:
-        idx = jnp.arange(self.action_array.shape[0] ** self.num_actions)
-        powers = self.action_array.shape[0] ** jnp.arange(self.num_actions)
-        digits = (idx[:, None] // powers[None, :]) % self.action_array.shape[0]
-        return self.action_array[digits]
-        # TODO this does not scale very nicely
-        # TODO should I add the following to utils to standardise it? if it is okay to use
-
-    @property
-    def max_steps_in_ep(self) -> int:
-        return int(200 // self.dt)
 
     @property
     def fixed_point(self) -> chex.Array:
@@ -81,6 +56,22 @@ class RosslerCSCA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
+        self.dt: float = 0.02
+        self.horizon: int = 200
+        self.max_steps_in_ep: int = int(200 // self.dt)
+        self.num_actions: int = 3
+        self.substeps: int = 5
+
+        self.action_array: chex.Array = utils.action_permutations_generation(self.num_actions)
+
+        self.requires_float64: bool = True
+
+        self.start_point: chex.Array = jnp.array([0.1, 0.0, 0.0], dtype=jnp.float64)
+        self.random_start: bool = False
+        self.random_start_low: chex.Array = jnp.array([-5.0, -5.0, 0.0], dtype=jnp.float64)
+        self.random_start_high: chex.Array = jnp.array([5.0, 5.0, 10.0], dtype=jnp.float64)
+        self.reward_ball: float = 1e-2
+
     @property
     def default_params(self) -> EnvParams:
         return EnvParams()
@@ -93,7 +84,7 @@ class RosslerCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         u = self.action_convert(input_action, params)
 
-        new_x = utils.integrate_ode(self._f, state.x, u, params.dt, params.substeps, params)
+        new_x = utils.integrate_ode(self._f, state.time * self.dt, state.x, u, self.dt, self.substeps, params)
         new_state = EnvState(x=new_x, time=state.time + 1)
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
@@ -108,7 +99,7 @@ class RosslerCSCA(base_env.BaseEnvironment):
                 done,
                 {})
 
-    def _f(self, x: chex.Array, u: chex.Array, params: EnvParams) -> chex.Array:
+    def _f(self, t: float, x: chex.Array, u: chex.Array, params: EnvParams) -> chex.Array:
         X, Y, Z = x[0], x[1], x[2]
         dx = -Y - Z
         dy = X + (params.a + u[0]) * Y
@@ -119,10 +110,10 @@ class RosslerCSCA(base_env.BaseEnvironment):
 
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
-        same_state = EnvState(x=params.start_point, time=0)
-        rand_x = jrandom.uniform(_key, shape=(3,), minval=params.random_start_low, maxval=params.random_start_high)
+        same_state = EnvState(x=self.start_point, time=0)
+        rand_x = jrandom.uniform(_key, shape=(3,), minval=self.random_start_low, maxval=self.random_start_high)
         random_state = EnvState(x=rand_x, time=0)
-        state = jax.tree.map(lambda r, s: jax.lax.select(params.random_start, r, s), random_state, same_state)
+        state = jax.tree.map(lambda r, s: jax.lax.select(self.random_start, r, s), random_state, same_state)
 
         return self.get_obs(state), state
 
@@ -136,8 +127,8 @@ class RosslerCSCA(base_env.BaseEnvironment):
         err = state_tp1.x - params.fixed_point
         reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
 
-        state_done = jnp.linalg.norm(err) < params.reward_ball
-        time_done = state_tp1.time >= params.max_steps_in_ep
+        state_done = jnp.linalg.norm(err) < self.reward_ball
+        time_done = state_tp1.time >= self.max_steps_in_ep
         boundary_done = jnp.linalg.norm(state_tp1.x) > 1e3
         done = jnp.logical_or(jnp.logical_or(state_done, boundary_done), time_done)
 
@@ -152,12 +143,62 @@ class RosslerCSCA(base_env.BaseEnvironment):
     def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:
         return EnvState(x=jnp.asarray(obs), time=-1)
 
+    def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
+        import matplotlib.pyplot as plt
+        import matplotlib.animation as animation
+        import numpy as np
+
+        states = np.asarray(trajectory_state.x)
+        xs = states[:, 0]
+        ys = states[:, 1]
+        zs = states[:, 2]
+
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.set_title(self.name)
+
+        margin = 2.0
+        ax.set_xlim(np.min(xs) - margin, np.max(xs) + margin)
+        ax.set_ylim(np.min(ys) - margin, np.max(ys) + margin)
+        ax.set_zlim(np.min(zs) - margin, np.max(zs) + margin)
+
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+
+        fixed_pt = np.asarray(params.fixed_point)
+        ax.plot([fixed_pt[0, 0]], [fixed_pt[1, 0]], [fixed_pt[2, 0]], 'kx', markersize=8, label="Fixed Point")
+
+        line, = ax.plot([], [], [], color='blue', linestyle='-', lw=1.0, alpha=0.8)
+        dot, = ax.plot([], [], [], color='red', marker='o', markersize=6)
+
+        ax.legend()
+
+        def update(frame):
+            line.set_data(xs[:frame], ys[:frame])
+            line.set_3d_properties(zs[:frame])
+
+            dot.set_data([xs[frame]], [ys[frame]])
+            dot.set_3d_properties([zs[frame]])
+
+            return line, dot
+
+        anim = animation.FuncAnimation(fig,
+                                       update,
+                                       frames=states.shape[0],
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       blit=False
+                                       )
+
+        anim.save(f"{file_path}_{self.name}.gif")
+        plt.close()
+
     @property
     def name(self) -> str:
         return "Rossler-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(params.num_actions,), dtype=jnp.float64)
+        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(self.num_actions,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         # Rossler is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
@@ -169,7 +210,7 @@ class RosslerCSDA(RosslerCSCA):
         super().__init__(**env_kwargs)
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        return params.action_perms[action.squeeze()] * params.max_control
+        return self.action_array[action.squeeze()] * params.max_control
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_perms))
+        return spaces.Discrete(len(self.action_array))

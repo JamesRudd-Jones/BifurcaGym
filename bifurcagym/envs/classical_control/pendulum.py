@@ -4,7 +4,7 @@ import jax.random as jrandom
 from bifurcagym.envs import base_env
 from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 
 
@@ -16,12 +16,6 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    action_array: jnp.ndarray = struct.field(False, default=(jnp.array((0.0, 1.0, -1.0))))
-    dt: float = struct.field(False, default=0.05)
-    horizon: int = struct.field(False, default=200)
-    max_steps_in_ep: int = struct.field(False, default=1000)
-    periodic_dim: jnp.ndarray = struct.field(False, default=jnp.array((1, 0)))  # TODO is this the best way?
-
     max_speed: float = 8.0
     maximum_max_speed: float = struct.field(False, default=8.0)  # maximum to ensure correct scaling
     gravity: float = 10.0
@@ -37,6 +31,16 @@ class PendulumCSDA(base_env.BaseEnvironment):
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
 
+        self.dt: float = 0.05
+        self.horizon: int = 200
+        self.max_steps_in_ep: int = 1000
+
+        self.periodic_dim: chex.Array = jnp.array((1, 0))  # TODO is this the best way?
+
+        self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
+
+        self.requires_float64: bool = False
+
     @property
     def default_params(self) -> EnvParams:
         return EnvParams()
@@ -50,8 +54,8 @@ class PendulumCSDA(base_env.BaseEnvironment):
         action = self.action_convert(input_action, params)
 
         newthdot = (state.theta_dot + (-3 * params.gravity / (2 * params.length) * jnp.sin(state.theta + jnp.pi) +
-                                       3.0 / (params.mass * params.length ** 2) * action) * params.dt)
-        unnorm_newth = state.theta + newthdot * params.dt
+                                       3.0 / (params.mass * params.length ** 2) * action) * self.dt)
+        unnorm_newth = state.theta + newthdot * self.dt
         newth = self._angle_normalise(unnorm_newth)
         newthdot = jnp.clip(newthdot, -params.max_speed, params.max_speed)
 
@@ -92,12 +96,12 @@ class PendulumCSDA(base_env.BaseEnvironment):
         action_t = self.action_convert(input_action_t, params)
         costs = self._angle_normalise(state_tp1.theta) ** 2 + 0.1 * state_tp1.theta_dot ** 2 + 0.001 * (action_t ** 2)
 
-        done = jnp.array(state_tp1.time >= params.max_steps_in_ep)  # TODO state_t or state_tp1
+        done = jnp.array(state_tp1.time >= self.max_steps_in_ep)  # TODO state_t or state_tp1
 
         return -costs, done
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        return params.action_array[action.squeeze()] * params.max_torque
+        return self.action_array[action.squeeze()] * params.max_torque
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array([state.theta, state.theta_dot])
@@ -142,7 +146,7 @@ class PendulumCSDA(base_env.BaseEnvironment):
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=thetas.shape[0],
-                                       interval=params.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")
@@ -153,14 +157,11 @@ class PendulumCSDA(base_env.BaseEnvironment):
         return "Pendulum-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Discrete:
-        return spaces.Discrete(len(params.action_array))
+        return spaces.Discrete(len(self.action_array))
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         high = jnp.array([jnp.pi, params.maximum_max_speed])
         return spaces.Box(-high, high, (2,), dtype=jnp.float32)
-
-    def reward_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-20, 0, (()), dtype=jnp.float32)
 
 
 class PendulumCSCA(PendulumCSDA):

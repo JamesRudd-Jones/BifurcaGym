@@ -7,6 +7,9 @@ from bifurcagym.envs import EnvState, EnvParams
 from bifurcagym import spaces
 
 
+jax.config.update("jax_enable_x64", True)
+
+
 class NormalisedEnvCSDA(object):
     """
     Normalises obs and rewards
@@ -75,27 +78,29 @@ class NormalisedEnvCSDA(object):
         return self._wrapped_normalised_env.get_state(self.unnormalise_obs(obs, params), params)
 
     def normalise_obs(self, obs: chex.Array, params: EnvParams) -> chex.Array:
-        pos_obs = obs - self.unnorm_obs_space(params).low
-        norm_obs = self.norm_obs_space_range(params) * pos_obs / self.unnorm_obs_space_range(params) + self.observation_space(params).low
+        unnorm_low = self.unnorm_obs_space(params).low
+        unnorm_range = self.unnorm_obs_space_range(params)
 
+        pos_obs = obs - unnorm_low
+        norm_obs = (2.0 * pos_obs / unnorm_range) - 1.0
         return norm_obs
 
     def normalise_delta_obs(self, obs: chex.Array, params: EnvParams) -> chex.Array:
-        norm_obs = obs / self.unnorm_obs_space_range(params) * 2  # TODO the original states times by two, unsure this is good for true normalisation
-
-        return norm_obs
+        return (obs * 2.0) / self.unnorm_obs_space_range(params)
 
     def unnormalise_obs(self, norm_obs: chex.Array, params: EnvParams) -> chex.Array:
-        pos_obs = self.unnorm_obs_space_range(params) * (norm_obs - self.observation_space(params).low) / self.norm_obs_space_range(params)
-        obs = pos_obs + self.unnorm_obs_space(params).low
+        unnorm_low = self.unnorm_obs_space(params).low
+        unnorm_range = self.unnorm_obs_space_range(params)
 
-        return obs
+        pos_obs = unnorm_range * (norm_obs + 1.0) / 2.0
+        return pos_obs + unnorm_low
 
     def unnormalise_delta_obs(self, obs: chex.Array, params: EnvParams) -> chex.Array:
-        range = self.unnorm_obs_space_range(params)
-        unnorm_obs = obs * range / 2  # TODO see above regarding the original reference
-
-        return unnorm_obs
+        # range = self.unnorm_obs_space_range(params)
+        # unnorm_obs = obs * range / 2  # TODO see above regarding the original reference
+        #
+        # return unnorm_obs
+        return (obs / 2.0) * self.unnorm_obs_space_range(params)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         return spaces.Box(low=-jnp.ones_like(self.unnorm_obs_space(params)),
