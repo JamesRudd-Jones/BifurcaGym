@@ -161,6 +161,10 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
 
         done = dist_to_target < 0.2
 
+        time_up = state_tp1.time >= self.max_steps_in_ep
+
+        done = jnp.logical_or(done, time_up)
+
         reward = jnp.array(-0.01)  # Time penalty
         # TODO a goal based reward or some distance metric?
 
@@ -173,10 +177,10 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
         return jnp.clip(action, -params.max_speed, params.max_speed)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
-        return jnp.array((state.x, state.y))
+        return jnp.array((state.x, state.y, state.time))
 
     def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:
-        return EnvState(x=obs[0], y=obs[1], time=-1)
+        return EnvState(x=obs[0], y=obs[1], time=obs[2])
 
     def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
@@ -270,7 +274,9 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
         return spaces.Box(-params.maximum_max_speed, params.maximum_max_speed, shape=(2,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-1.4, 1.4, (2,), dtype=jnp.float64)
+        low = jnp.array([self.x_bounds[0], self.y_bounds[0], 0.0], dtype=jnp.float64)
+        high = jnp.array([self.x_bounds[1], self.y_bounds[1], self.max_steps_in_ep], dtype=jnp.float64)
+        return spaces.Box(low, high, shape=(3,), dtype=jnp.float64)
 
 
 class BickleyJetFlowCSDA(BickleyJetFlowCSCA):

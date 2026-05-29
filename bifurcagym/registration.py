@@ -70,19 +70,19 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
+    elif env_id == "NPendulum-v0":
+        if cont_state and cont_action:
+            env = n_pendulum.NPendulumCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = n_pendulum.NPendulumCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
     elif env_id == "Pendubot-v0":
         if cont_state and cont_action:
             env = acrobot.PendubotCSCA(**env_kwargs)
         elif cont_state and not cont_action:
             env = acrobot.PendubotCSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State version.")
-
-    elif env_id == "NPendulum-v0":
-        if cont_state and cont_action:
-            env = n_pendulum.NPendulumCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = n_pendulum.NPendulumCSDA
         else:
             raise ValueError("No Discrete State version.")
 

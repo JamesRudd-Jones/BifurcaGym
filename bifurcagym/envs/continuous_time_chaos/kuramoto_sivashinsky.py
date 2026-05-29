@@ -153,7 +153,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         return state.u[5::self.x_S.shape[0] // self.state_dim]
 
     def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:
-        return EnvState(u=obs[0], time=-1)
+        raise ValueError("Cannot reconstruct full state: This environment is partially observable.")
 
     def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
         import matplotlib.pyplot as plt

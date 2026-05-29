@@ -8,7 +8,7 @@ import jax.random as jrandom
 from typing import Any, Dict, Tuple
 import chex
 from flax import struct
-from bifurcagym.envs import base_env
+from bifurcagym.envs import base_env, utils
 from bifurcagym import spaces
 from pygments.styles import default
 
@@ -42,6 +42,7 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         self.horizon: int = 25
         self.max_steps_in_ep: int = 500
         self.num_poles: int = num_poles
+        self.substeps: int = 2
 
         self.periodic_dim: chex.Array = jnp.concatenate((jnp.zeros(2, ), jnp.tile(jnp.array((1, 0)), self.num_poles)))
 
@@ -73,37 +74,21 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)
 
-        costhetas = jnp.cos(state.thetas)
-        sinthetas = jnp.sin(state.thetas)
+        q = jnp.concatenate([jnp.array([state.x]), state.thetas])
+        q_dot = jnp.concatenate([jnp.array([state.x_dot]), state.theta_dots])
+        x0 = jnp.concatenate([q, q_dot])
 
-        xdot_term1 = -2 * jnp.sum(params.mass_poles * params.lengths * (state.theta_dots ** 2) * sinthetas)
-        xdot_term2 = 3 * params.gravity * jnp.sum(params.mass_poles * sinthetas * costhetas)
-        xdot_term3 = 4 * (action - params.mu * state.x_dot)
-        xdot_denom = 4 * self.mass_total(params) - 3 * jnp.sum(params.mass_poles * costhetas ** 2)
+        # Integrate forward using precise physics
+        xf = utils.integrate_ode(self.dynamics_eom, state.time * self.dt, x0, action, self.dt, self.substeps, params)
 
-        xdot_update = (xdot_term1 + xdot_term2 + xdot_term3) / xdot_denom
+        n_dof = self.num_poles + 1
+        new_q = xf[:n_dof]
+        new_q_dot = xf[n_dof:]
 
-        thetadot_term1 = -3 * params.mass_poles * params.lengths * (state.theta_dots ** 2) * sinthetas * costhetas
-        thetadot_term2 = 6 * self.mass_total(params) * params.gravity * sinthetas
-        thetadot_term3 = 6 * (action - params.mu * state.x_dot) * costhetas
-        thetadot_denom = 4 * params.lengths * self.mass_total(params) - 3 * params.mass_poles * params.lengths * costhetas ** 2
-
-        thetadot_update = (thetadot_term1 + thetadot_term2 + thetadot_term3) / thetadot_denom
-
-        x = state.x + state.x_dot * self.dt
-        unnorm_thetas = state.thetas + state.theta_dots * self.dt
-        thetas = jax.vmap(self._angle_normalise)(unnorm_thetas)
-        x_dot = state.x_dot + xdot_update * self.dt
-        theta_dots = state.theta_dots + thetadot_update * self.dt
-
-        # delta_s = jnp.array((x, x_dot, unnorm_thetas, theta_dots)) - self.get_obs(state)
-        # TODO check why this is unnorm theta
-
-        # Update state dict and evaluate termination conditions
-        new_state = EnvState(x=x,
-                             x_dot=x_dot,
-                             thetas=thetas,
-                             theta_dots=theta_dots,
+        new_state = EnvState(x=new_q[0],
+                             x_dot=new_q_dot[0],
+                             thetas=jax.vmap(self._angle_normalise)(new_q[1:]),
+                             theta_dots=new_q_dot[1:],
                              time=state.time + 1)
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
@@ -114,6 +99,78 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                 reward,
                 done,
                 {"discount": self.discount(done)})
+
+    def kinetic_energy(self, q: chex.Array, q_dot: chex.Array, params) -> chex.Array:
+        cart_x_dot = q_dot[0]
+        thetas = q[1:]
+        theta_dots = q_dot[1:]
+
+        # Cart kinetic energy
+        K_cart = 0.5 * params.mass_cart * cart_x_dot ** 2
+
+        # Absolute angles and angular velocities
+        phi = jnp.cumsum(thetas)
+        phi_dot = jnp.cumsum(theta_dots)
+
+        # Expand scalar length/mass to arrays for N poles
+        L = jnp.ones(self.num_poles) * params.lengths
+        m = jnp.ones(self.num_poles) * params.mass_poles
+
+        # Joint velocities (base joint moves with the cart in X)
+        v_joint_x = jnp.concatenate([jnp.array([cart_x_dot]), cart_x_dot + jnp.cumsum(L * phi_dot * jnp.cos(phi))[:-1]])
+        v_joint_y = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(-L * phi_dot * jnp.sin(phi))[:-1]])
+
+        # Centre of mass velocities for each uniform rod
+        v_com_x = v_joint_x + (L / 2) * phi_dot * jnp.cos(phi)
+        v_com_y = v_joint_y - (L / 2) * phi_dot * jnp.sin(phi)
+
+        v_sq = v_com_x ** 2 + v_com_y ** 2
+        I = (1.0 / 12.0) * m * L ** 2
+
+        K_poles = jnp.sum(0.5 * m * v_sq + 0.5 * I * phi_dot ** 2)
+        return K_cart + K_poles
+
+    def potential_energy(self, q: chex.Array, params) -> chex.Array:
+        thetas = q[1:]
+        phi = jnp.cumsum(thetas)
+
+        L = jnp.ones(self.num_poles) * params.lengths
+        m = jnp.ones(self.num_poles) * params.mass_poles
+
+        # Joint heights (cart is at y=0, standard setup balances upward +y)
+        joint_y = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(L * jnp.cos(phi))[:-1]])
+        com_y = joint_y + (L / 2) * jnp.cos(phi)
+
+        V = jnp.sum(m * params.gravity * com_y)
+        return V
+
+    def compute_bias(self, q: chex.Array, q_dot: chex.Array, params) -> chex.Array:
+        G = jax.grad(self.potential_energy, argnums=0)(q, params)
+        dK_dq = jax.grad(self.kinetic_energy, argnums=0)(q, q_dot, params)
+
+        def momentum_func(q_val):
+            return jax.grad(self.kinetic_energy, argnums=1)(q_val, q_dot, params)
+
+        _, M_dot_q_dot = jax.jvp(momentum_func, (q,), (q_dot,))
+        return M_dot_q_dot - dK_dq + G
+
+    def dynamics_eom(self, t: float, x: chex.Array, u: chex.Array, params) -> chex.Array:
+        n_dof = self.num_poles + 1  # cart + N poles
+        q = x[:n_dof]
+        q_dot = x[n_dof:]
+
+        # Apply control force (action) and cart friction (-mu * cart_velocity)
+        force = jnp.squeeze(u) - params.mu * q_dot[0]
+        tau = jnp.zeros(n_dof).at[0].set(force)
+
+        # Autodiff Mass Matrix and Bias
+        M = jax.hessian(self.kinetic_energy, argnums=1)(q, q_dot, params)
+        bias = self.compute_bias(q, q_dot, params)
+
+        # Solve M * q_ddot = tau - bias
+        q_ddot = jnp.linalg.solve(M, tau - bias)
+
+        return jnp.concatenate([q_dot, q_ddot])
 
     @staticmethod
     def _angle_normalise(x):
@@ -150,16 +207,19 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         goal = jnp.array([0.0, self.length_total(params)])
-        pendulum_x, pendulum_y = jax.vmap(self._get_coords)(state_tp1.thetas, self.lengths(params))
-        position = jnp.array([state_tp1.x + jnp.sum(pendulum_x), jnp.sum(pendulum_y)])
+
+        abs_angles = jnp.cumsum(state_tp1.thetas)
+        tip_x = state_tp1.x + jnp.sum(params.lengths * jnp.sin(abs_angles))
+        tip_y = jnp.sum(params.lengths * jnp.cos(abs_angles))
+        position = jnp.array([tip_x, tip_y])
+
         squared_distance = jnp.sum((position - goal) ** 2)
         squared_sigma = 0.25 ** 2
         costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
 
-        done = jnp.logical_or(state_tp1.x < -params.x_threshold,  # TODO state_t or state_tp1
-                               state_tp1.x > params.x_threshold)
-
-        fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_ep)
+        out_of_bounds = jnp.logical_or(state_tp1.x < -params.x_threshold, state_tp1.x > params.x_threshold)
+        time_limit = state_tp1.time >= self.max_steps_in_ep
+        fin_done = jnp.logical_or(out_of_bounds, time_limit)
 
         return -costs, fin_done
 

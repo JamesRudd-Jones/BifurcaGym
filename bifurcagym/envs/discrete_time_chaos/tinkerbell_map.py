@@ -57,7 +57,7 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)
 
-        new_xy = self._map(jnp.array((state.x, state.y)), action)
+        new_xy = self._map(jnp.array((state.x, state.y)), action, params)
         new_state = EnvState(x=new_xy[0], y=new_xy[1], time=state.time + 1)
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
@@ -72,10 +72,10 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
                 done,
                 {})
 
-    def _map(self, xy: chex.Array, u: chex.Array) -> chex.Array:
+    def _map(self, xy: chex.Array, u: chex.Array, params: EnvParams) -> chex.Array:
         x = xy[0]; y = xy[1]
-        xn1 = x * x - y * y + (self.a + u[0]) * x + self.b * y
-        yn1 = 2.0 * x * y + (self.c + u[1]) * x + self.d * y
+        xn1 = x * x - y * y + (params.a + u[0]) * x + params.b * y
+        yn1 = 2.0 * x * y + (params.c + u[1]) * x + params.d * y
 
         return jnp.array((xn1, yn1))
 

@@ -128,10 +128,10 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
         return jnp.clip(action, -params.max_speed, params.max_speed)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
-        return jnp.array((state.x, state.y))
+        return jnp.array((state.x, state.y, state.time))
 
     def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:
-        return EnvState(x=obs[0], y=obs[1], time=-1)
+        return EnvState(x=obs[0], y=obs[1], time=obs[2])
 
     def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
@@ -223,9 +223,9 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
         return spaces.Box(-params.maximum_max_speed, params.maximum_max_speed, shape=(2,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        lo = jnp.array((self.x_bounds[0], self.y_bounds[0]))
-        hi = jnp.array((self.x_bounds[1], self.y_bounds[1]))
-        return spaces.Box(lo, hi, (2,), dtype=jnp.float64)
+        lo = jnp.array((self.x_bounds[0], self.y_bounds[0], 0.0))
+        hi = jnp.array((self.x_bounds[1], self.y_bounds[1], self.max_steps_in_ep))
+        return spaces.Box(lo, hi, (3,), dtype=jnp.float64)
 
 
 class QuadrupleGyreFlowCSDA(QuadrupleGyreFlowCSCA):

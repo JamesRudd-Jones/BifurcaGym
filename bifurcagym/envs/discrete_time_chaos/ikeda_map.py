@@ -42,8 +42,6 @@ class IkedaMapCSCA(base_env.BaseEnvironment):
         self.horizon: int = 200
         self.max_steps_in_ep: int = 2000
 
-        self.periodic_dim: chex.Array = jnp.array((0, 0, 1, 0))  # TODO is this the best way?
-
         self.action_array: chex.Array = jnp.array((0.0, 1.0, 0.5, -1.0, -0.5))
 
         self.requires_float64: bool = True
