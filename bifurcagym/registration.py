@@ -25,6 +25,8 @@ from bifurcagym.envs.fluid_control import (fluidic_pinball,
                                            )
 from bifurcagym.envs.non_stationary import (boat_in_current,
                                             )
+from bifurcagym.envs.other_envs import (ays_iam,
+                                        )
 from bifurcagym.wrappers import (AutoResetWrapper,
                                  MetricsWrapper,
                                  NormalisedWrapperCSDA,
@@ -43,6 +45,8 @@ def make(env_id: str,
 
     if env_id not in registered_envs:
         raise ValueError(f"{env_id} is not in registered environments.")
+
+
 
     # # # Classical Control
     ####################################################################################################################
@@ -103,6 +107,8 @@ def make(env_id: str,
             env = wet_chicken.WetChickenDSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State Continuous Action version.")
+
+
 
     # # # Continuous Time Chaos
     ####################################################################################################################
@@ -171,6 +177,7 @@ def make(env_id: str,
             raise ValueError("No Discrete State version.")
 
 
+
     # # # Discrete Time Chaos
     ####################################################################################################################
     elif env_id == "HenonMap-v0":
@@ -219,6 +226,8 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
+
+
     # # # Fluid Control
     ####################################################################################################################
     elif env_id == "FluidicPinball-v0":
@@ -230,15 +239,30 @@ def make(env_id: str,
             raise ValueError("No Discrete State version.")
 
 
+
     # # # Non-Stationary
     ####################################################################################################################
     elif env_id == "BoatInCurrent-v0":
         if cont_state and cont_action:
             env = boat_in_current.BoatInCurrentCSCA(**env_kwargs)
         elif cont_state and not cont_action:
-            env = boat_in_current.BoatInCurrentCSCA(**env_kwargs)
+            env = boat_in_current.BoatInCurrentCSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State version.")
+
+
+
+    # # # Other Environments
+    ####################################################################################################################
+    elif env_id == "AYSIAM-v0":
+        if cont_state and cont_action:
+            env = ays_iam.AYSIAMCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = ays_iam.AYSIAMCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
+
 
     else:
         raise ValueError("Environment ID is not registered.")
@@ -292,5 +316,6 @@ registered_envs = ["Acrobot-v0",
                    "TentMap-v0",
                    "TinkerbellMap-v0",
                    "FluidicPinball-v0",
-                   "BoatInCurrent-v0"
+                   "BoatInCurrent-v0",
+                   "AYSIAM-v0"
                    ]

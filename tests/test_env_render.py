@@ -11,7 +11,7 @@ import itertools
 env_names = [
              # "Acrobot-v0",
              # "CartPole-v0",
-             "NCartPole-v0",
+             # "NCartPole-v0",
              # "NPendulum-v0",
              # "Pendubot-v0",
              # "Pendulum-v0",
@@ -31,6 +31,7 @@ env_names = [
              # "TinkerbellMap-v0",
              # "FluidicPinball-v0",
              # "BoatInCurrent-v0",
+             "AYSIAM-v0",
              ]
 cont_state = [True, False]
 cont_action = [True, False]

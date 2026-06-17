@@ -31,9 +31,10 @@ env_names = [
              # "IkedaMap-v0",
              # "LogisticMap-v0",
              # "TentMap-v0",
-             "TinkerbellMap-v0",
+             # "TinkerbellMap-v0",
              # "FluidicPinball-v0",
              # "BoatInCurrent-v0",
+             "AYSIAM-v0",
              ]
 cont_state = [True, False]
 cont_action = [True, False]
