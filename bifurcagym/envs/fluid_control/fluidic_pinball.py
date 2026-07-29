@@ -34,7 +34,7 @@ class EnvParams:
     tau: float = 0.6  # Relaxation time (related to viscosity)
 
     # D2Q9 constraints
-    w: chex.Array = struct.field(False, default=jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36], dtype=jnp.float64))
+    w: chex.Array = struct.field(False, default=jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36]))
     idxs: chex.Array = struct.field(False, default=jnp.arange(9))
     c: chex.Array = struct.field(False, default=jnp.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1],
                                                                         [1, 1], [-1, 1], [-1, -1], [1, -1]]))
