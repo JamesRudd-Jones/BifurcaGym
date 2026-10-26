@@ -1,3 +1,9 @@
+"""
+Scratch script trialling PhiFlow as the fluid solver.
+
+EXPERIMENTAL - work in progress, not registered in bifurcagym.make and not covered by the test suite.
+"""
+
 # from phi.jax.flow import *
 import phi.jax.flow as phijax
 from tqdm import trange

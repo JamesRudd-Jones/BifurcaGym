@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 from functools import partial
 import chex
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 from bifurcagym.envs import EnvState, EnvParams
 from bifurcagym import spaces
 

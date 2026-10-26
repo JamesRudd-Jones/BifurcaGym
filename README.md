@@ -37,61 +37,102 @@ RL setups that utilise generative dynamics models.
 Observations that are fed in must match the scale (aka if normalised or not) compared to the environment output.
 
 Further, each env must have a defined reward function that again is amenable to Model-Based RL experiments where focus 
-is placed on learning a transition function. We combine the reward and done function as a seperate entity for faster
-computation as well as for using the reward function if we do not look to learn in when using Model-Based methods.
-
-BifurcaGym has the following environments currently:
-
-| Environment                    |     State Space     |    Action Space     | Working |                                                                                            Reference                                                                                             |
-|:-------------------------------|:-------------------:|:-------------------:|:-------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-| Acrobot                        |     Continuous      | Discrete/Continuous |    Y    |         [Code](https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_control/acrobot.py); [Paper](http://users.cms.caltech.edu/~murray/preprints/erl-M91-46.pdf)          |
-| Cartpole                       |     Continuous      | Discrete/Continuous |    Y    |                                      [Code](https://github.com/fusion-ml/trajectory-information-rl); [Paper](https://ieeexplore.ieee.org/document/6313077)                                       |
-| N Cartpole                     |     Continuous      | Discrete/Continuous |    N    |                                                       [Info](https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html)                                                       |
-| N Pendulum                     |     Continuous      | Discrete/Continuous |    N    |                                                                                                                                                                                                  |
-| Pendubot                       |     Continuous      | Discrete/Continuous |    Y    |                                        [Paper](https://link.springer.com/chapter/10.1007/BFb0015081); [Info](https://underactuated.mit.edu/acrobot.html)                                         |
-| Pendulum                       |     Continuous      | Discrete/Continuous |    Y    |                                                                  [Code](https://github.com/fusion-ml/trajectory-information-rl)                                                                  |
-| Wet Chicken                    | Discrete/Continuous | Discrete/Continuous |    Y    | [Code](https://github.com/LAVA-LAB/improved_spi/blob/main/wetChicken.py); [Paper](https://www.tu-ilmenau.de/fileadmin/Bereiche/IA/neurob/Publikationen/conferences_int/2009/Hans-ICANN-2009.pdf) |
-| Arnold–Beltrami–Childress Flow |     Continuous      | Discrete/Continuous |    Y    |                                                       [Info](https://en.wikipedia.org/wiki/Arnold%E2%80%93Beltrami%E2%80%93Childress_flow)                                                       |
-| Bickley Jet Flow               |     Continuous      | Discrete/Continuous |    Y    |                                                                        [Info](https://en.wikipedia.org/wiki/Bickley_jet)                                                                         |
-| Chua                           |     Continuous      | Discrete/Continuous |    Y    |                                                                     [Info](http://www.scholarpedia.org/article/Chua_circuit)                                                                     |
-| Double Gyre Flow               |     Continuous      | Discrete/Continuous |    Y    |                           [Paper](https://www.nature.com/articles/s41467-021-27015-y.pdf); [Info](https://shaddenlab.berkeley.edu/uploads/LCS-tutorial/examples.html)                            |
-| 1D Kuramoto-Sivashinsky        |     Continuous      |     Continuous      |    Y    |                                                              [Paper](https://royalsocietypublishing.org/doi/10.1098/rspa.2019.0351)                                                              |
-| Lorenz63                       |     Continuous      | Discrete/Continuous |    Y    |                                [Paper](https://npg.copernicus.org/articles/31/319/2024/npg-31-319-2024.pdf); [Info](https://en.wikipedia.org/wiki/Lorenz_system)                                 |
-| Quadruple Gyre FLow            |     Continuous      | Discrete/Continuous |    Y    |                                                                                                                                                                                                  |
-| Rossler                        |     Continuous      | Discrete/Continuous |    Y    |                                                                  [Info](http://www.scholarpedia.org/article/Rossler_attractor)                                                                   |
-| Bernoulli Map                  | Discrete/Continuous | Discrete/Continuous |    N    |                                                                   [Info](https://en.wikipedia.org/wiki/Dyadic_transformation)                                                                    |
-| Henon Map                      | Discrete/Continuous | Discrete/Continuous |    Y    |                                                                       [Info](https://en.wikipedia.org/wiki/H%C3%A9non_map)                                                                       |
-| Ikeda Map                      |     Continuous      | Discrete/Continuous |    Y    |                                                                         [Info](https://en.wikipedia.org/wiki/Ikeda_map)                                                                          |
-| Logistic Map                   | Discrete/Continuous | Discrete/Continuous |    Y    |            [Paper](https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement); [Info](https://blbadger.github.io/logistic-map.html#mjx-eqn-eq1)            |
-| Tent Map                       | Discrete/Continuous | Discrete/Continuous |    Y    |                                                                          [Info](https://en.wikipedia.org/wiki/Tent_map)                                                                          |
-| Tinkerbell Map                 |     Continuous      | Discrete/Continuous |    N    |                                                                    [Info](https://www.starsandus.com/post/the-tinkerbell-map)                                                                    |
+is placed on learning a transition function. We combine the reward and done function as a separate entity for faster
+computation as well as for using the reward function if we do not look to learn it when using Model-Based methods.
 
 
+## Installation
 
+BifurcaGym uses [PDM](https://pdm-project.org) and Python 3.10.
 
+```bash
+pdm install                   # CPU
+pdm install -G cuda           # NVIDIA GPU (CUDA 12)
+pdm install -G baselines      # adds optax, distrax and wandb for the PPO baseline
+```
 
+## Quick Start
 
-# TODOs
+```python
+import jax.random as jrandom
+import bifurcagym
 
-- Check why normalisation seems to affect results negatively
-- Improve metrics wrapper so it doesn't add .env_state.env_state as this is confusing
-- Would be good to work with MARL and SARL - figure out how to easily fit in both with wrappers as well
-- The benefit is that rewards can easily be adjusted by the user. We have tried to keep it comprehensive in that reward 
-functions require the action taken (good for many control tasks where we want to minimise a control signal), the 
-original state, the transitioned to state (allows easy one step state comparison), plus the definition of a key if 
-stochatic rewards are beneficial. However, thought needs to go into how the random process is managed if comparing 
-rewards from the environment with rewards calculated from collected trajectories. A benefit of Jax though is it can be 
-fairly easy to store and track random keys to that this would be possible if needed.
+env, env_params = bifurcagym.make("Lorenz63-v0", cont_state=True, cont_action=True, normalised=True, autoreset=True)
 
-Add the following envs:
-- Mackey Glass
-- Van Der Pol Oscillator
-- Predator Prey / Lotka-Volterra
-- Kuramoto Oscillator
-- Three Body Problem
-- AYS IAM SARL
-- AYS IAM MARL
-- Fusion Problems
-- Wake flow control
-- 3 pinballs or something similar to emulate wind turbine fields
-- Something more complex than KS equations
+key = jrandom.key(42)
+key, reset_key = jrandom.split(key)
+obs, state = env.reset(env_params, reset_key)
+
+key, action_key, step_key = jrandom.split(key, 3)
+action = env.action_space(env_params).sample(action_key)
+obs, delta_obs, state, reward, done, info = env.step(action, state, env_params, step_key)
+
+# Model-Based RL: step from an observation instead of the hidden state, and query the reward function directly
+obs_gen, delta_obs_gen, state_gen, reward_gen, done_gen, _ = env.generative_step(action, obs, env_params, step_key)
+```
+
+Because `env_params` is passed explicitly, environments can be `jax.vmap`-ed over both keys and parameters, for
+example to sweep a bifurcation parameter or apply non-stationary changes.
+
+## Environments
+
+`C` = continuous, `D` = discrete, `D/C` = both are available through `cont_state` / `cont_action` in `make`.
+`partial` marks environments where the observation is a partial view of the state, so `generative_step` is not
+available (it is also unavailable for discrete state versions, as observations are projections of the state).
+
+| Environment | ID | State Space | Action Space | Obs Dim | Action Dim | Working | Reference |
+|:--|:--|:--:|:--:|:--:|:--:|:--:|:--|
+| Acrobot | `Acrobot-v0` | C | D/C | 6 | 1 | Y | [Code](https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_control/acrobot.py); [Paper](http://users.cms.caltech.edu/~murray/preprints/erl-M91-46.pdf) |
+| Cartpole | `CartPole-v0` | C | D/C | 4 | 1 | Y | [Code](https://github.com/fusion-ml/trajectory-information-rl); [Paper](https://ieeexplore.ieee.org/document/6313077) |
+| N Cartpole | `NCartPole-v0` | C | D/C | 6 | 1 | N | [Info](https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html) |
+| N Pendulum | `NPendulum-v0` | C | D/C | 4 | 1 | N |  |
+| Pendubot | `Pendubot-v0` | C | D/C | 6 | 1 | Y | [Paper](https://link.springer.com/chapter/10.1007/BFb0015081); [Info](https://underactuated.mit.edu/acrobot.html) |
+| Pendulum | `Pendulum-v0` | C | D/C | 2 | 1 | Y | [Code](https://github.com/fusion-ml/trajectory-information-rl) |
+| Wet Chicken | `WetChicken-v0` | D/C | D/C | 2 | 2 | Y | [Code](https://github.com/LAVA-LAB/improved_spi/blob/main/wetChicken.py); [Paper](https://www.tu-ilmenau.de/fileadmin/Bereiche/IA/neurob/Publikationen/conferences_int/2009/Hans-ICANN-2009.pdf) |
+| Arnold–Beltrami–Childress Flow | `ABCFlow-v0` | C | D/C | 3 | 3 | Y | [Info](https://en.wikipedia.org/wiki/Arnold%E2%80%93Beltrami%E2%80%93Childress_flow) |
+| Bickley Jet Flow | `BickleyJetFlow-v0` | C | D/C | 3 | 2 | Y | [Info](https://en.wikipedia.org/wiki/Bickley_jet) |
+| Chua | `Chua-v0` | C | D/C | 3 | 2 | Y | [Info](http://www.scholarpedia.org/article/Chua_circuit) |
+| Double Gyre Flow | `DoubleGyreFlow-v0` | C | D/C | 3 | 2 | Y | [Paper](https://www.nature.com/articles/s41467-021-27015-y.pdf); [Info](https://shaddenlab.berkeley.edu/uploads/LCS-tutorial/examples.html) |
+| 1D Kuramoto–Sivashinsky | `KS-v0` | C (partial) | D/C | 8 | 4 | Y | [Paper](https://royalsocietypublishing.org/doi/10.1098/rspa.2019.0351) |
+| Lorenz63 | `Lorenz63-v0` | C | D/C | 3 | 3 | Y | [Paper](https://npg.copernicus.org/articles/31/319/2024/npg-31-319-2024.pdf); [Info](https://en.wikipedia.org/wiki/Lorenz_system) |
+| Quadruple Gyre Flow | `QuadrupleGyreFlow-v0` | C | D/C | 3 | 2 | Y |  |
+| Rössler | `Rossler-v0` | C | D/C | 3 | 3 | Y | [Info](http://www.scholarpedia.org/article/Rossler_attractor) |
+| Hénon Map | `HenonMap-v0` | D/C | D/C | 2 | 2 | Y | [Info](https://en.wikipedia.org/wiki/H%C3%A9non_map) |
+| Ikeda Map | `IkedaMap-v0` | C | D/C | 2 | 1 | Y | [Info](https://en.wikipedia.org/wiki/Ikeda_map) |
+| Logistic Map | `LogisticMap-v0` | D/C | D/C | 1 | 1 | Y | [Paper](https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement); [Info](https://blbadger.github.io/logistic-map.html#mjx-eqn-eq1) |
+| Tent Map | `TentMap-v0` | D/C | D/C | 1 | 1 | Y | [Info](https://en.wikipedia.org/wiki/Tent_map) |
+| Tinkerbell Map | `TinkerbellMap-v0` | C | D/C | 2 | 2 | N | [Info](https://www.starsandus.com/post/the-tinkerbell-map) |
+| Fluidic Pinball | `FluidicPinball-v0` | C (partial) | D/C | 360 | 3 | Y |  |
+| AYS Integrated Assessment Model | `AYSIAM-v0` | C | D/C | 3 | 2 | Y | [Code](https://github.com/fstrnad/pyDRLinWESM) |
+
+Further environments (non-stationary boat in a current, multi-agent AYS, more fluid control tasks) are work in progress
+and are not yet registered; see [ROADMAP.md](ROADMAP.md).
+
+## Baselines
+
+```bash
+pdm run python baselines/ppo_baseline.py --env Pendulum-v0 --cont-action --total-timesteps 1000000
+```
+
+## Testing
+
+```bash
+JAX_PLATFORMS=cpu pdm run test        # all registered envs, skips slow (FluidicPinball) and render tests
+JAX_PLATFORMS=cpu pdm run test-all    # everything
+```
+
+## Citation
+
+If you use BifurcaGym in your work, please cite:
+
+```bibtex
+@misc{bifurcagym,
+  title  = {BifurcaGym: A Benchmark of Reinforcement Learning and Control Environments with Chaotic Dynamics},
+  author = {TODO},
+  year   = {2026},
+}
+```
+
+## License
+
+MIT

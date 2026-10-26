@@ -1,1 +1,12 @@
 /bifurcagym/tesy_tesy.py
+__pycache__/
+*.py[cod]
+.venv/
+.pdm-python
+.pdm-build/
+.pytest_cache/
+.ruff_cache/
+.idea/*
+!.idea/bifurcagym.iml
+wandb/
+animations/

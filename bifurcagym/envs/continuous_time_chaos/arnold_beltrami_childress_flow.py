@@ -168,7 +168,6 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
     def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
-        from mpl_toolkits.mplot3d import Axes3D
         import numpy as np
 
         times = np.asarray(trajectory_state.time)

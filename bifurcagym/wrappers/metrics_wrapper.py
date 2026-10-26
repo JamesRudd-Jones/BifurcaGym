@@ -1,10 +1,9 @@
 import jax
-import jax.numpy as jnp
 import jax.random as jrandom
 from functools import partial
 import chex
 from typing import Any, Dict, Tuple
-from bifurcagym.envs import EnvState, EnvParams
+from bifurcagym.envs import EnvParams
 from flax import struct
 import dataclasses
 
@@ -44,26 +43,28 @@ def create_augmented_state_class(base_state_instance):
         ("timestep", int, dataclasses.field(default=0)),
     ]
 
-    # Combine them into a new flat dataclass definition
+    # Combine them into a plain annotated class that struct.dataclass then turns into a frozen PyTree dataclass
     # Note: Fields with defaults must come after fields without defaults.
-    combined_fields = []
+    annotations = {}
+    namespace = {}
     for f in base_fields:
-        # If the base field doesn't have a default, we must preserve that or provide one
-        if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING:
-            combined_fields.append((f.name, f.type))
-        else:
-            combined_fields.append((f.name, f.type, f))
+        annotations[f.name] = f.type
+        # If the base field doesn't have a default, we must preserve that, otherwise copy the field with its metadata
+        if f.default is not dataclasses.MISSING:
+            namespace[f.name] = dataclasses.field(default=f.default, metadata=f.metadata)
+        elif f.default_factory is not dataclasses.MISSING:
+            namespace[f.name] = dataclasses.field(default_factory=f.default_factory, metadata=f.metadata)
+        elif f.metadata:
+            namespace[f.name] = dataclasses.field(metadata=f.metadata)
 
-    combined_fields.extend(metrics_fields)
+    for name, field_type, field in metrics_fields:
+        annotations[name] = field_type
+        namespace[name] = field
 
-    # Create the dataclass dynamically
-    DynamicState = dataclasses.make_dataclass(
-        cls_name=f"Augmented_{base_cls.__name__}",
-        fields=combined_fields,
-    )
+    namespace["__annotations__"] = annotations
 
-    # Register it with Flax struct so JAX can trace it as a PyTree
-    DynamicState = struct.dataclass(DynamicState)
+    # Create the class dynamically and register it with Flax struct so JAX can trace it as a PyTree
+    DynamicState = struct.dataclass(type(f"Augmented_{base_cls.__name__}", (), namespace))
 
     _AUGMENTED_STATE_CACHE[base_cls] = DynamicState
     return DynamicState

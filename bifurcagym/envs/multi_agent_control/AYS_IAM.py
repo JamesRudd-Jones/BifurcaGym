@@ -1,4 +1,6 @@
 """
+EXPERIMENTAL - work in progress, not registered in bifurcagym.make and not covered by the test suite.
+
 Adaption of the AYS environment into JAX, enabling full vectorisation
 Original: https://github.com/fstrnad/pyDRLinWESM
 """

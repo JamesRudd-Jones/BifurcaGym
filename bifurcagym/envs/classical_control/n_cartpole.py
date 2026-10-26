@@ -10,7 +10,6 @@ import chex
 from flax import struct
 from bifurcagym.envs import base_env, utils
 from bifurcagym import spaces
-from pygments.styles import default
 
 
 @struct.dataclass
@@ -44,7 +43,8 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         self.num_poles: int = num_poles
         self.substeps: int = 2
 
-        self.periodic_dim: chex.Array = jnp.concatenate((jnp.zeros(2, ), jnp.tile(jnp.array((1, 0)), self.num_poles)))
+        # obs is (x, x_dot, thetas, theta_dots) so only the thetas wrap
+        self.periodic_dim: chex.Array = jnp.concatenate((jnp.zeros(2), jnp.ones(self.num_poles), jnp.zeros(self.num_poles)))
 
         self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
 

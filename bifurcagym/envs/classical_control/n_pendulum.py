@@ -43,7 +43,8 @@ class NPendulumCSDA(base_env.BaseEnvironment):
         self.n_links:int = n_links
         self.substeps: int = 2
 
-        self.periodic_dim: chex.Array = jnp.array((1, 0))  # TODO is this the best way?
+        # obs is (thetas, theta_dots) so only the first n_links dims wrap
+        self.periodic_dim: chex.Array = jnp.concatenate((jnp.ones(self.n_links), jnp.zeros(self.n_links)))
 
         self.action_array: chex.Array = jnp.array((0.0, 1.0, -1.0))
 

@@ -1,17 +1,33 @@
+"""
+PPO baseline for BifurcaGym environments, based on PureJaxRL https://github.com/luchris429/purejaxrl
+
+Example:
+    pdm run python baselines/ppo_baseline.py --env Lorenz63-v0 --cont-action --total-timesteps 1000000
+"""
+
+import argparse
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-import flax
 import flax.linen as nn
 import optax
-from typing import Sequence, NamedTuple
+from typing import NamedTuple
 import distrax
 import bifurcagym
 from flax.training.train_state import TrainState
-import os
-import sys
-import wandb
 
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--env", default="Lorenz63-v0", choices=bifurcagym.registered_envs)
+parser.add_argument("--discrete-state", action="store_true")
+parser.add_argument("--cont-action", action="store_true")
+parser.add_argument("--normalised", action="store_true")
+parser.add_argument("--total-timesteps", type=int, default=700000)
+parser.add_argument("--num-envs", type=int, default=4)
+parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--wandb", action="store_true", help="Log to Weights & Biases")
+parser.add_argument("--render", action="store_true", help="Save a gif of a test rollout")
+args = parser.parse_args()
 
 print(f"Device: {jax.extend.backend.get_backend().platform}")
 
@@ -70,20 +86,7 @@ class Transition(NamedTuple):
     env_state: bifurcagym.envs.base_env.EnvState
 
 
-env_names = [
-             # "Acrobot-v0",
-             # "CartPole-v0",
-             # "NCartPole-v0",
-             # "Pendubot-v0",
-             # "Pendulum-v0",
-             # "WetChicken-v0",
-             #  "KS-v0",
-             # "LogisticMap-v0",
-             # "TentMap-v0",
-             "BoatInCurrent-v0",
-             ]
-
-key = jrandom.key(42)
+key = jrandom.key(args.seed)
 
 config = {"LR": 1e-3,
           "UPDATE_EPOCHS": 4,
@@ -96,43 +99,45 @@ config = {"LR": 1e-3,
           "MAX_GRAD_NORM": 1.0,
           "ANNEAL_LR": True,
           "DEBUG": True,
+          "WANDB": args.wandb,
           }
 
 # total_timesteps = 100000000
-total_timesteps = 700000#00
-num_envs = 4  # 8  # 64
+total_timesteps = args.total_timesteps
+num_envs = args.num_envs
 rollout_length = 128
 num_updates = total_timesteps // rollout_length // num_envs
 config["MINIBATCH_SIZE"] = (num_envs * rollout_length // config["NUM_MINIBATCHES"])
 
-cont_state = True
-cont_action = True
-normalised = False
+cont_state = not args.discrete_state
+cont_action = args.cont_action
+normalised = args.normalised
 autoreset = True
 metrics = True
 
-wandb.init(project="bifurcagym_testing",
-           group=env_names[0],
-           name=f"Cont State: {cont_state}; Cont Action: {cont_action}; Normalised: {normalised}; AutoReset: {autoreset}; Metrics: {metrics}",
-           # mode="disabled",
-           config=config,
-           )
+if config["WANDB"]:
+    import wandb
+    wandb.init(project="bifurcagym_testing",
+               group=args.env,
+               name=f"Cont State: {cont_state}; Cont Action: {cont_action}; Normalised: {normalised}; AutoReset: {autoreset}; Metrics: {metrics}",
+               config=config,
+               )
 
-env = bifurcagym.make(env_names[0],
-                      cont_state=cont_state,
-                      cont_action=cont_action,
-                      normalised=normalised,
-                      autoreset=autoreset,
-                      metrics=metrics)
+env, env_params = bifurcagym.make(args.env,
+                                  cont_state=cont_state,
+                                  cont_action=cont_action,
+                                  normalised=normalised,
+                                  autoreset=autoreset,
+                                  metrics=metrics)
 key, _key = jrandom.split(key)
 batch_key = jrandom.split(_key, num_envs)
-init_obs, init_env_state = jax.vmap(env.reset)(batch_key)
+init_obs, init_env_state = jax.vmap(env.reset, in_axes=(None, 0))(env_params, batch_key)
 
 if cont_action:
-    network = ActorCriticContinuous(env.action_space().shape[0])
+    network = ActorCriticContinuous(env.action_space(env_params).shape[0])
 else:
-    network = ActorCriticDiscrete(env.action_space().shape[0])
-init_x = jnp.zeros(env.observation_space().shape)
+    network = ActorCriticDiscrete(env.action_space(env_params).shape[0])
+init_x = jnp.zeros(env.observation_space(env_params).shape)
 key, _key = jrandom.split(key)
 network_params = network.init(_key, init_x)
 
@@ -164,7 +169,10 @@ def update_step(runner_state, unused):
         # STEP ENV
         key, _key = jrandom.split(key)
         batch_key = jrandom.split(_key, num_envs)
-        nobs, delta_obs, nenv_state, reward, done, info = jax.vmap(env.step)(action, env_state, batch_key)
+        nobs, delta_obs, nenv_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, None, 0))(action,
+                                                                                                    env_state,
+                                                                                                    env_params,
+                                                                                                    batch_key)
         transition = Transition(done, action, value, reward, log_prob, obs, info, env_state)
         return (train_state, nenv_state, nobs, key), transition
 
@@ -250,7 +258,7 @@ def update_step(runner_state, unused):
     key = update_state[-1]
 
     # Debugging mode
-    if config.get("DEBUG"):
+    if config["DEBUG"]:
         def callback(info, policy_loss, critic_loss):
             return_values = info["returned_episode_returns"][info["returned_episode"]]
             timesteps = info["timestep"][info["returned_episode"]] * num_envs
@@ -262,7 +270,10 @@ def update_step(runner_state, unused):
             step_dict["policy loss"] = policy_loss.squeeze()
             step_dict["critic loss"] = critic_loss.squeeze()
 
-            wandb.log(step_dict)
+            if config["WANDB"]:
+                wandb.log(step_dict)
+            elif len(timesteps) > 0:
+                print(f"global step={timesteps[-1]}, episodic return={return_values[-1]}")
 
         jax.debug.callback(callback, metric, jnp.mean(loss_info[1]), jnp.mean(loss_info[0]))
 
@@ -284,15 +295,15 @@ def test_step(runner_state, unused):
 
     # STEP ENV
     key, _key = jrandom.split(key)
-    nobs, delta_obs, nenv_state, reward, done, info = env.step(action, env_state, _key)
+    nobs, delta_obs, nenv_state, reward, done, info = env.step(action, env_state, env_params, _key)
     transition = Transition(done, action, value, reward, log_prob, obs, info, env_state)
-    return (train_state, nenv_state, nobs, key), transition
+    return (train_state, nenv_state, nobs, key), (transition, env_params)
 
 key, _key = jrandom.split(key)
-init_obs, init_env_state = env.reset(_key)
+init_obs, init_env_state = env.reset(env_params, _key)
 key, _key = jrandom.split(key)
 runner_state = (trained_state, init_env_state, init_obs, _key)
-runner_state, test_traj_batch = jax.lax.scan(test_step, runner_state, None, 1000)
+runner_state, (test_traj_batch, test_traj_params) = jax.lax.scan(test_step, runner_state, None, 1000)
 
 return_values = test_traj_batch.info["returned_episode_returns"][test_traj_batch.info["returned_episode"]]
 timesteps = test_traj_batch.info["timestep"][test_traj_batch.info["returned_episode"]] * num_envs
@@ -300,17 +311,11 @@ for t in range(len(timesteps)):
     print(f"global step={timesteps[t]}, episodic return={return_values[t]}")
 # print(f"global step={timesteps[-1]}, episodic return={return_values[-1]}")
 
-sys.exit()  # TODO stop rendering for now
+if args.render:
+    if metrics:
+        traj_for_rendering = env._to_base_env_state(test_traj_batch.env_state)
+    else:
+        traj_for_rendering = test_traj_batch.env_state
 
-# first dim is num updates, second is num steps, third is num env; the last one can be any choice but won't work if num_envs=1
-if metrics:
-    traj_for_rendering = test_traj_batch.env_state.env_state
-else:
-    traj_for_rendering = test_traj_batch.env_state
-
-if cont_action:
-    # env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Cont-Action")
-    env.render_traj(traj_for_rendering, file_path=f"./animations/baselines/Cont-Action")
-else:
-    # env.render_traj(traj_for_rendering, file_path=f"../../animations/baselines/Discrete-Action")
-    env.render_traj(traj_for_rendering, file_path=f"./animations/baselines/Discrete-Action")
+    action_type = "Cont-Action" if cont_action else "Discrete-Action"
+    env.render_traj(traj_for_rendering, test_traj_params, file_path=f"./animations/baselines/{action_type}")

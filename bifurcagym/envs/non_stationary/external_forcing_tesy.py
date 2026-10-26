@@ -1,3 +1,9 @@
+"""
+Scratch script for the external forcing used in BoatInCurrent.
+
+EXPERIMENTAL - work in progress, not registered in bifurcagym.make and not covered by the test suite.
+"""
+
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom

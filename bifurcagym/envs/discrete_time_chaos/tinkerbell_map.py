@@ -4,7 +4,7 @@ import jax.random as jrandom
 from bifurcagym.envs import base_env
 from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 from bifurcagym.envs import utils
 
@@ -43,7 +43,7 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
         self.random_start_high: chex.Array = jnp.array([1.0, 1.0], dtype=jnp.float64)
         self.reward_ball: float = 0.001
         # Precompute a fixed point (solve map(s) - s = 0)
-        self.fixed_point = self._compute_fixed_point()
+        self.fixed_point = self._compute_fixed_point(self.default_params)
 
     @property
     def default_params(self) -> EnvParams:
@@ -79,10 +79,10 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
 
         return jnp.array((xn1, yn1))
 
-    def _compute_fixed_point(self) -> chex.Array:
+    def _compute_fixed_point(self, params: EnvParams) -> chex.Array:
         # Fixed points satisfy map(s, u=0) - s = 0
         def F(xy):
-            return self._map(xy, jnp.zeros(2)) - xy
+            return self._map(xy, jnp.zeros(2), params) - xy
 
         init_seeds = jnp.array(((0.0, 2.0),
                                 (0.2, 0.2),
@@ -100,7 +100,7 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
 
         return sols[best]
 
-    def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
+    def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
         same_state = EnvState(x=self.start_point[0], y=self.start_point[1], time=0)
         rand = jrandom.uniform(_key, shape=(2,), minval=self.random_start_low, maxval=self.random_start_high)
@@ -111,16 +111,17 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
         return self.get_obs(state), state
 
     def reward_and_done_function(self,
-                                 input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
+                                 input_action_t: chex.Numeric,
                                  state_t: EnvState,
                                  state_tp1: EnvState,
+                                 params: EnvParams,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
         reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
 
         state_done = jnp.linalg.norm(err) < self.reward_ball
-        time_done = state_tp1.time >= self.max_steps_in_episode
+        time_done = state_tp1.time >= self.max_steps_in_ep
 
         diverged = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y))) > 1e3
 
@@ -128,24 +129,67 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
 
         return reward, done
 
-    def action_convert(self,
-                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return jnp.clip(action, -self.max_control, self.max_control).squeeze()
+    def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
+        return jnp.clip(action, -params.max_control, params.max_control)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         return jnp.array((state.x, state.y))
 
-    def get_state(self, obs: chex.Array, key: chex.PRNGKey = None) -> EnvState:
+    def get_state(self, obs: chex.Array, params: EnvParams) -> EnvState:
         return EnvState(x=obs[0], y=obs[1], time=-1)
+
+    def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
+        import matplotlib.pyplot as plt
+        import matplotlib.animation as animation
+        import numpy as np
+
+        xs = np.asarray(trajectory_state.x)
+        ys = np.asarray(trajectory_state.y)
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.set_title(self.name)
+
+        margin = 0.2
+        ax.set_xlim(np.min(xs) - margin, np.max(xs) + margin)
+        ax.set_ylim(np.min(ys) - margin, np.max(ys) + margin)
+
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.grid(True, linestyle='--', alpha=0.6)
+
+        fixed_pt = np.asarray(self.fixed_point)
+        ax.plot(fixed_pt[0], fixed_pt[1], 'kx', markersize=10, label="Fixed Point", zorder=3)
+
+        line, = ax.plot([], [], color='blue', linestyle='-', lw=1.0, alpha=0.5, zorder=1)
+        dot, = ax.plot([], [], color='red', marker='o', markersize=6, zorder=2)
+
+        ax.legend()
+
+        def update(frame):
+            line.set_data(xs[:frame + 1], ys[:frame + 1])
+
+            dot.set_data([xs[frame]], [ys[frame]])
+
+            return line, dot
+
+        anim = animation.FuncAnimation(fig,
+                                       update,
+                                       frames=xs.shape[0],
+                                       interval=100,
+                                       blit=True
+                                       )
+
+        anim.save(f"{file_path}_{self.name}.gif")
+        plt.close()
 
     @property
     def name(self) -> str:
         return "TinkerbellMap-v0"
 
-    def action_space(self) -> spaces.Box:
-        return spaces.Box(-self.max_control, self.max_control, shape=(2,), dtype=jnp.float64)
+    def action_space(self, params: EnvParams) -> spaces.Box:
+        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(2,), dtype=jnp.float64)
 
-    def observation_space(self) -> spaces.Box:
+    def observation_space(self, params: EnvParams) -> spaces.Box:
         # TinkerbellMap is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
         return spaces.Box(-1e6, 1e6, shape=(2,), dtype=jnp.float64)
 
@@ -158,9 +202,8 @@ class TinkerbellMapCSDA(TinkerbellMapCSCA):
                                                     (1.0, 0.0), (1.0, 1.0), (1.0, -1.0),
                                                     (-1.0, 0.0), (-1.0, 1.0), (-1.0, -1.0)))
 
-    def action_convert(self,
-                       action: Union[jnp.int_, jnp.float_, chex.Array]) -> Union[jnp.int_, jnp.float_, chex.Array]:
-        return self.action_array[action.squeeze()] * self.max_control
+    def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
+        return self.action_array[action.squeeze()] * params.max_control
 
-    def action_space(self) -> spaces.Discrete:
+    def action_space(self, params: EnvParams) -> spaces.Discrete:
         return spaces.Discrete(len(self.action_array))

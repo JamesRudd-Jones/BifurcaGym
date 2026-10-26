@@ -2,11 +2,10 @@
 
 import jax
 import jax.numpy as jnp
-import jax.random as jrandom
 from bifurcagym.envs import base_env
 from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 import cmocean
 import numpy as np
@@ -31,7 +30,6 @@ class EnvParams:
     nx: int = struct.field(False, default=300)
     ny: int = struct.field(False, default=150)
     reynolds: float = 105.0  # Re < 15: Steady, Re ~ 100: Vortex Shedding, Re > 115: Chaotic
-    tau: float = 0.6  # Relaxation time (related to viscosity)
 
     # D2Q9 constraints
     w: chex.Array = struct.field(False, default=jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36]))
@@ -91,6 +89,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
     def __init__(self, **env_kwargs):
         super().__init__(**env_kwargs)
+
+        self.requires_float64: bool = False
 
     @property
     def default_params(self) -> EnvParams:
@@ -269,8 +269,9 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         return jnp.clip(action, -params.max_control, params.max_control)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
+        params = self.default_params  # c and downsample_val are static fields so defaults are safe here
         rho = jnp.sum(state.f, axis=-1, keepdims=True)
-        u = jnp.dot(state.f, self.c) / rho
+        u = jnp.dot(state.f, params.c) / rho
 
         # Vorticity calc
         uy, ux = jnp.gradient(u[:, :, 0])
@@ -278,7 +279,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         vorticity = vx - uy
 
         obs = jnp.stack([u[:, :, 0], u[:, :, 1], vorticity])
-        obs = obs[:, ::self.downsample_val, ::self.downsample_val]  # Downsample
+        obs = obs[:, ::params.downsample_val, ::params.downsample_val]  # Downsample
         flat_obs = jnp.reshape(obs, -1)
         # TODO should we flatten or release as an image?
         return flat_obs
@@ -291,10 +292,9 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
     def render_traj(self, trajectory_state: EnvState, params: EnvParams, file_path: str = "../animations"):
         import matplotlib.pyplot as plt
         import matplotlib.animation as animation
-        import numpy as np
 
         fs = np.asarray(trajectory_state.f)
-        cs = np.asarray(params.c)
+        cs = np.asarray(params.c)  # static field so not stacked over the trajectory
 
         x_fine = np.arange(0, params.nx, 1)
         y_fine = np.arange(0, params.ny, 1)
@@ -321,7 +321,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
             return u[:, :, 0], u[:, :, 1], vorticity
 
-        u_0, u_1, vorticity = get_plot_obs(fs[0], cs[0])
+        u_0, u_1, vorticity = get_plot_obs(fs[0], cs)
 
         # Setup animation elements
         dot, = ax.plot([], [], color="magenta", marker="o", markersize=10, label='Pinball', zorder=5)
@@ -335,7 +335,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         def update(frame):
             # dot.set_data([trajectory_state.x[frame]], [trajectory_state.y[frame]])
 
-            u_0, u_1, vorticity = get_plot_obs(fs[frame], cs[frame])
+            u_0, u_1, vorticity = get_plot_obs(fs[frame], cs)
             pcm.set_array(vorticity.ravel())
 
             # arrow.set_UVC(U_coarse, V_coarse)
@@ -359,7 +359,10 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(3,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-1.4, 1.4, (3 * params.nx // params.downsample_val * params.ny // params.downsample_val,), dtype=jnp.float64)
+        # Ceiling division to match the [::downsample_val] slicing in get_obs
+        nx_obs = -(-params.nx // params.downsample_val)
+        ny_obs = -(-params.ny // params.downsample_val)
+        return spaces.Box(-1.4, 1.4, (3 * nx_obs * ny_obs,), dtype=jnp.float64)
 
 
 class FluidicPinballCSDA(FluidicPinballCSCA):

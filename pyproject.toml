@@ -1,69 +1,85 @@
 [project]
 name = "bifurcagym"
 version = "0.1.0"
-description = "Default template for PDM package"
+description = "A JAX benchmark of reinforcement learning and control environments with chaotic dynamics"
 authors = [
     {name = "james_dell", email = "james.rudd.jones@gmail.com"},
 ]
 dependencies = [
-    "jax[cuda]==0.6.0",
     "matplotlib>=3.10.3",
-    "wandb>=0.21.0",
-    "phiflow>=3.4.0",
-    "h5py>=3.14.0",
-    "tqdm>=4.67.1",
-    "jax-cfd>=0.2.1",
-    "seaborn>=0.13.2",
-    "xarray>=2025.6.1",
     "cmocean>=4.0.3",
+    "jax==0.6.0",
+    "flax>=0.10.6",
+    "chex>=0.1.90",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"
 license = {text = "MIT"}
 
- [build-system]
+[project.optional-dependencies]
+baselines = [
+    "optax>=0.2.7",
+    "distrax>=0.1.5",
+    "wandb>=0.21.0",
+]
+experimental = [
+    "phiflow>=3.4.0",
+    "jax-cfd>=0.2.1",
+    "seaborn>=0.13.2",
+    "xarray>=2025.6.1",
+    "tqdm>=4.67.1",
+]
+cuda = [
+    "jax[cuda12]==0.6.0",
+]
+
+[build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
- [[tool.pdm.source]]
- name = "jax_cuda"
- url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
- verify_ssl = true
- type = "find_links"
+[[tool.pdm.source]]
+name = "jax_cuda"
+url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+verify_ssl = true
+type = "find_links"
 
-                    [tool.pdm.scripts]
+[tool.pdm.scripts]
 test.cmd = "pytest -n auto --maxprocesses 8 --dist loadfile"
+test-all.cmd = "pytest -n auto --maxprocesses 8 --dist loadfile -m ''"
 # test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
-lint.shell = "ruff . && black --check ."
-fmt.shell = "ruff --fix . && black ."
+lint.shell = "ruff check ."
+fmt.shell = "ruff check --fix ."
 
-                    [tool.pdm.dev-dependencies]
-dev = [
-    "flax>=0.10.6",
-    "distrax>=0.1.5",
-    "lxm3>=0.4.0",
-    "ruff>=0.1.11",
-    "black>=23.12.1",
-    "pytest>=7.4.4",
-    "pytest-xdist>=3.5.0",
-    "pre-commit>=3.6.0",
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not slow and not render'"
+markers = [
+    "slow: environments that take minutes per test on CPU",
+    "render: tests that render trajectories to gifs",
 ]
 
-# Ruff configuration
-# https://docs.astral.sh/ruff/configuration/
 [tool.ruff]
 line-length = 120
+extend-exclude = [
+    # Experimental and work in progress, see the module docstrings
+    "bifurcagym/envs/multi_agent_control",
+    "bifurcagym/envs/non_stationary",
+    "bifurcagym/envs/fluid_control/pinball_speed_test.py",
+    "bifurcagym/envs/discrete_time_chaos/bernoulli_map.py",
+]
+
+[tool.ruff.lint]
 select = [
     "E", # pycodestyle
     "F", # pyflakes
     "I", # isort
 ]
-ignore = ["E731"]
+ignore = ["E731", "E501"]
 
-[tool.ruff.extend-per-file-ignores]
+[tool.ruff.lint.extend-per-file-ignores]
 "__init__.py" = ["F401"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 force-single-line = true
 force-sort-within-sections = true
 single-line-exclusions = ["typing"]
@@ -85,3 +101,12 @@ exclude = '''
   | scratch
 )/
 '''
+[dependency-groups]
+dev = [
+    "lxm3>=0.4.0",
+    "ruff>=0.1.11",
+    "black>=23.12.1",
+    "pytest>=7.4.4",
+    "pytest-xdist>=3.5.0",
+    "pre-commit>=3.6.0",
+]

@@ -1,3 +1,9 @@
+"""
+Scratch script trialling jax-cfd as the fluid solver.
+
+EXPERIMENTAL - work in progress, not registered in bifurcagym.make and not covered by the test suite.
+"""
+
 import jax
 import jax.numpy as jnp
 import jax_cfd.base as cfd

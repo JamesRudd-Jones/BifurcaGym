@@ -1,2 +1,5 @@
-from bifurcagym.envs.non_stationary import (boat_in_current,
-                                            )
+"""
+Non-stationary environments.
+
+EXPERIMENTAL - work in progress, not registered in bifurcagym.make and not covered by the test suite.
+"""

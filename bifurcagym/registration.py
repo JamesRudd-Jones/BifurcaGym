@@ -23,8 +23,6 @@ from bifurcagym.envs.discrete_time_chaos import (henon_map,
                                                  )
 from bifurcagym.envs.fluid_control import (fluidic_pinball,
                                            )
-from bifurcagym.envs.non_stationary import (boat_in_current,
-                                            )
 from bifurcagym.envs.other_envs import (ays_iam,
                                         )
 from bifurcagym.wrappers import (AutoResetWrapper,
@@ -240,18 +238,6 @@ def make(env_id: str,
 
 
 
-    # # # Non-Stationary
-    ####################################################################################################################
-    elif env_id == "BoatInCurrent-v0":
-        if cont_state and cont_action:
-            env = boat_in_current.BoatInCurrentCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = boat_in_current.BoatInCurrentCSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State version.")
-
-
-
     # # # Other Environments
     ####################################################################################################################
     elif env_id == "AYSIAM-v0":
@@ -316,6 +302,5 @@ registered_envs = ["Acrobot-v0",
                    "TentMap-v0",
                    "TinkerbellMap-v0",
                    "FluidicPinball-v0",
-                   "BoatInCurrent-v0",
                    "AYSIAM-v0"
                    ]

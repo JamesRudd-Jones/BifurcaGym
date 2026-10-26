@@ -1,4 +1,6 @@
 """
+EXPERIMENTAL - work in progress, not registered in bifurcagym.make and not covered by the test suite.
+
 This is the implementation of the AYS Environment in the form
 that it can used within the Agent-Environment interface 
 in combination with the DRL-agent.

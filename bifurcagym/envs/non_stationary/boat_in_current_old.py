@@ -1,5 +1,7 @@
 """
-Fluid solver based on Stable Fluids by Jos Stan: "https://pages.cs.wisc.edu/~chaol/data/cs777/stam-stable_fluids.pdf"
+EXPERIMENTAL - work in progress, not registered in bifurcagym.make and not covered by the test suite.
+
+Fluid solver based on Stable Fluids by Jos Stam: "https://pages.cs.wisc.edu/~chaol/data/cs777/stam-stable_fluids.pdf"
 """
 
 

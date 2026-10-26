@@ -4,7 +4,7 @@ import jax.random as jrandom
 from bifurcagym.envs import base_env
 from bifurcagym import spaces
 from flax import struct
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple
 import chex
 from bifurcagym.envs import utils
 
