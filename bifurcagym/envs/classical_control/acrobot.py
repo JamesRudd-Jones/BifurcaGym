@@ -278,9 +278,10 @@ class PendubotCSDA(AcrobotCSDA):
                 + (m1 * lc1 + m2 * l1) * g * jnp.cos(theta1 - jnp.pi / 2)
                 + phi2
                 )
-        ddtheta2 = (d2 / d1 * phi1 - m2 * l1 * lc2 * dtheta1 ** 2 * jnp.sin(theta2) - phi2
+        # Torque acts on the first joint: d1 * ddtheta1 + d2 * ddtheta2 + phi1 = a
+        ddtheta2 = (d2 / d1 * (phi1 - a) - m2 * l1 * lc2 * dtheta1 ** 2 * jnp.sin(theta2) - phi2
                    ) / (m2 * lc2 ** 2 + i2 - d2 ** 2 / d1)
-        ddtheta1 = -(a + d2 * ddtheta2 + phi1) / d1
+        ddtheta1 = (a - d2 * ddtheta2 - phi1) / d1
 
         return jnp.array([dtheta1, dtheta2, ddtheta1, ddtheta2])
 

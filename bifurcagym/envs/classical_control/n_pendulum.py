@@ -31,7 +31,8 @@ class NPendulumCSDA(base_env.BaseEnvironment):
     """
     N-link pendulum environment where control torque is applied only at the base joint (index 0)
     Angles are relative joint angles; absolute link orientation = cumsum(theta)
-    Approximate dynamics: gravity acts on each link (via absolute orientation), torques only at base joint; inertial coupling is not modelled here
+    Links are uniform rods; the full equations of motion (including inertial coupling) come from the Lagrangian via
+    autodiff, see kinetic_energy and potential_energy
     """
 
     def __init__(self, n_links: int=2, **env_kwargs):
@@ -100,10 +101,10 @@ class NPendulumCSDA(base_env.BaseEnvironment):
         v_com_y = v_joint_y + (L / 2) * phi_dot * jnp.sin(phi)
 
         v_sq = v_com_x ** 2 + v_com_y ** 2
-        I = (1.0 / 12.0) * m * L ** 2  # Moment of inertia for uniform rod about COM
+        inertia = (1.0 / 12.0) * m * L ** 2  # Moment of inertia for uniform rod about COM
 
         # K = 1/2 m v^2 + 1/2 I w^2
-        K = jnp.sum(0.5 * m * v_sq + 0.5 * I * phi_dot ** 2)
+        K = jnp.sum(0.5 * m * v_sq + 0.5 * inertia * phi_dot ** 2)
         return K
 
     @staticmethod

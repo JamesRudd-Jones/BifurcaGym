@@ -178,7 +178,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                        origin='lower',
                        vmin=v_min,
                        vmax=v_max)
-        cbar = fig.colorbar(im, ax=ax, orientation='vertical', pad=0.05, shrink=0.5, label="U Value")
+        fig.colorbar(im, ax=ax, orientation='vertical', pad=0.05, shrink=0.5, label="U Value")
 
         def update(frame):
             ax.clear()

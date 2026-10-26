@@ -51,7 +51,8 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
 
         self.requires_float64: bool = True
 
-        self.x_bounds: chex.Array = jnp.array((0.0, 4.0 * jnp.pi))
+        # Periodic channel of length pi * r_e (r_e = 6.371) so that every wave k_n = 2n / r_e fits exactly
+        self.x_bounds: chex.Array = jnp.array((0.0, jnp.pi * 6.371))
         self.y_bounds: chex.Array = jnp.array((-3.0, 3.0))
         self.goal_state: chex.Array = jnp.array((6.0, -2.0))
         self.x_len: chex.Array = self.x_bounds[1] - self.x_bounds[0]

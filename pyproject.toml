@@ -44,18 +44,20 @@ verify_ssl = true
 type = "find_links"
 
 [tool.pdm.scripts]
-test.cmd = "pytest -n auto --maxprocesses 8 --dist loadfile"
-test-all.cmd = "pytest -n auto --maxprocesses 8 --dist loadfile -m ''"
+test.cmd = "pytest -n auto --maxprocesses 8 --dist load"
+test-all.cmd = "pytest -n auto --maxprocesses 8 --dist load -m ''"
+test-physics.cmd = "pytest -n auto --maxprocesses 8 --dist load -m physics tests/physics"
 # test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
 lint.shell = "ruff check ."
 fmt.shell = "ruff check --fix ."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not slow and not render'"
+addopts = "-m 'not slow and not render and not physics'"
 markers = [
     "slow: environments that take minutes per test on CPU",
     "render: tests that render trajectories to gifs",
+    "physics: physical validity checks of the environment dynamics",
 ]
 
 [tool.ruff]

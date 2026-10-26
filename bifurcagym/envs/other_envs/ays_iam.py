@@ -103,7 +103,7 @@ class AYSIAMCSDA(base_env.BaseEnvironment):
         ays_inv = 1.0 - ays
         inv_s_rho = ays_inv[2] ** params.rho
 
-        sigma = 4e12 * 0.5 ** (action[1] / params.rho)
+        sigma = params.sigma * 0.5 ** (action[1] / params.rho)
 
         A_val = A_mid * (ays[0] / ays_inv[0])
         Y_val = Y_mid * (ays[1] / ays_inv[1])

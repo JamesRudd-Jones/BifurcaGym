@@ -125,9 +125,9 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         v_com_y = v_joint_y - (L / 2) * phi_dot * jnp.sin(phi)
 
         v_sq = v_com_x ** 2 + v_com_y ** 2
-        I = (1.0 / 12.0) * m * L ** 2
+        inertia = (1.0 / 12.0) * m * L ** 2
 
-        K_poles = jnp.sum(0.5 * m * v_sq + 0.5 * I * phi_dot ** 2)
+        K_poles = jnp.sum(0.5 * m * v_sq + 0.5 * inertia * phi_dot ** 2)
         return K_cart + K_poles
 
     def potential_energy(self, q: chex.Array, params) -> chex.Array:

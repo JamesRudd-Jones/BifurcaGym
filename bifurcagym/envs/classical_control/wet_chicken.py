@@ -396,8 +396,6 @@ def plot_2d_stuff():
 
     # Create grid for storing average values
     grid_size = 50  # Resolution of our grid
-    x_grid = np.linspace(0, env.width, grid_size)
-    y_grid = np.linspace(0, env.length, grid_size)
     velocity_grid = np.zeros((grid_size, grid_size))
     turbulence_grid = np.zeros((grid_size, grid_size))
     reward_grid = np.zeros((grid_size, grid_size))

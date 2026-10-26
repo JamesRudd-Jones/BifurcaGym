@@ -8,7 +8,7 @@ import jax.random as jrandom
 from typing import Any, Dict, Tuple
 import chex
 from flax import struct
-from bifurcagym.envs import base_env
+from bifurcagym.envs import base_env, utils
 from bifurcagym import spaces
 
 
@@ -50,6 +50,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         self.dt: float = 0.1
         self.horizon: int = 25
         self.max_steps_in_ep: int = 500
+        self.substeps: int = 2
 
         self.periodic_dim: chex.Array = jnp.array((0, 0, 1, 0))  # TODO is this the best way?
 
@@ -69,39 +70,14 @@ class CartPoleCSDA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)
 
-        costheta = jnp.cos(state.theta)
-        sintheta = jnp.sin(state.theta)
+        # RK4 as PILCO integrates this system with ODE45, explicit Euler pumps energy into the pole at this dt
+        s = jnp.array((state.x, state.theta, state.x_dot, state.theta_dot))
+        ns = utils.integrate_ode(self._dsdt, state.time * self.dt, s, action, self.dt, self.substeps, params)
 
-        xdot_term1 = -2 * params.mass_pole_length * (state.theta_dot ** 2) * sintheta
-        xdot_term2 = 3 * params.mass_pole * params.gravity * sintheta * costheta
-        xdot_term3 = 4 * action - 4 * params.mu * state.x_dot
-        xdot_denom = 4 * params.mass_total - 3 * params.mass_pole * costheta ** 2
-
-        xdot_update = (xdot_term1 + xdot_term2 + xdot_term3) / xdot_denom
-
-        thetadot_term1 = -3 * params.mass_pole_length * (state.theta_dot ** 2) * sintheta * costheta
-        thetadot_term2 = 6 * params.mass_total * params.gravity * sintheta
-        theatdot_term3 = 6 * (action - params.mu * state.x_dot) * costheta
-        thetadot_denom = 4 * params.length * params.mass_total - 3 * params.mass_pole_length * costheta ** 2
-
-        thetadot_update = (thetadot_term1 + thetadot_term2 + theatdot_term3) / thetadot_denom
-
-        # xdot_update = ((-2 * self.mass_pole_length * (state.theta_dot ** 2) * sintheta + 3 * self.mass_pole * self.gravity
-        #                 * sintheta * costheta + 4 * action - 4 * self.mu * state.x_dot) /
-        #                (4 * self.mass_total - 3 * self.mass_pole * costheta ** 2))
-        #
-        # thetadot_update = ((-3 * self.mass_pole_length * (state.theta_dot ** 2) * sintheta * costheta + 6 *
-        #                    self.mass_total * self.gravity * sintheta + 6 * (action - self.mu * state.x_dot) * costheta) /
-        #                    (4 * self.length * self.mass_total - 3 * self.mass_pole_length * costheta ** 2))
-
-        x = state.x + state.x_dot * self.dt
-        unnorm_theta = state.theta + state.theta_dot * self.dt
-        theta = self._angle_normalise(unnorm_theta)
-        x_dot = state.x_dot + xdot_update * self.dt
-        theta_dot = state.theta_dot + thetadot_update * self.dt
-
-        delta_s = jnp.array((x, x_dot, unnorm_theta, theta_dot)) - self.get_obs(state)
-        # TODO check why this is unnorm theta
+        x = ns[0]
+        theta = self._angle_normalise(ns[1])
+        x_dot = ns[2]
+        theta_dot = ns[3]
 
         new_state = EnvState(x=x,
                              x_dot=x_dot,
@@ -117,6 +93,27 @@ class CartPoleCSDA(base_env.BaseEnvironment):
                 reward,
                 done,
                 {"discount": self.discount(done)})
+
+    def _dsdt(self, t: float, s: chex.Array, action: chex.Array, params: EnvParams) -> chex.Array:
+        _, theta, x_dot, theta_dot = s
+        costheta = jnp.cos(theta)
+        sintheta = jnp.sin(theta)
+
+        xdot_term1 = -2 * params.mass_pole_length * (theta_dot ** 2) * sintheta
+        xdot_term2 = 3 * params.mass_pole * params.gravity * sintheta * costheta
+        xdot_term3 = 4 * action - 4 * params.mu * x_dot
+        xdot_denom = 4 * params.mass_total - 3 * params.mass_pole * costheta ** 2
+
+        xdot_update = (xdot_term1 + xdot_term2 + xdot_term3) / xdot_denom
+
+        thetadot_term1 = -3 * params.mass_pole_length * (theta_dot ** 2) * sintheta * costheta
+        thetadot_term2 = 6 * params.mass_total * params.gravity * sintheta
+        theatdot_term3 = 6 * (action - params.mu * x_dot) * costheta
+        thetadot_denom = 4 * params.length * params.mass_total - 3 * params.mass_pole_length * costheta ** 2
+
+        thetadot_update = (thetadot_term1 + thetadot_term2 + theatdot_term3) / thetadot_denom
+
+        return jnp.array((x_dot, theta_dot, xdot_update, thetadot_update))
 
     @staticmethod
     def _angle_normalise(x):

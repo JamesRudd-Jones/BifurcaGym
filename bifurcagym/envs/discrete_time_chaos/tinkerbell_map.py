@@ -37,10 +37,11 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
 
         self.requires_float64: bool = True
 
-        self.start_point: chex.Array = jnp.array([0.1, 0.1], dtype=jnp.float64)
+        # Canonical initial condition, the basin of attraction is irregular so random starts are kept close to it
+        self.start_point: chex.Array = jnp.array([-0.72, -0.64], dtype=jnp.float64)
         self.random_start: bool = True
-        self.random_start_low: chex.Array = jnp.array([-1.0, -1.0], dtype=jnp.float64)
-        self.random_start_high: chex.Array = jnp.array([1.0, 1.0], dtype=jnp.float64)
+        self.random_start_low: chex.Array = self.start_point - 0.2
+        self.random_start_high: chex.Array = self.start_point + 0.2
         self.reward_ball: float = 0.001
         # Precompute a fixed point (solve map(s) - s = 0)
         self.fixed_point = self._compute_fixed_point(self.default_params)
@@ -73,7 +74,8 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
                 {})
 
     def _map(self, xy: chex.Array, u: chex.Array, params: EnvParams) -> chex.Array:
-        x = xy[0]; y = xy[1]
+        x = xy[0]
+        y = xy[1]
         xn1 = x * x - y * y + (params.a + u[0]) * x + params.b * y
         yn1 = 2.0 * x * y + (params.c + u[1]) * x + params.d * y
 

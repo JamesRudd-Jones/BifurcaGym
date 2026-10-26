@@ -118,9 +118,9 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
         key_x, key_y, key_z = jrandom.split(key, 3)
         delta = 0.001
         start_point = 0.2
-        state = EnvState(x=jrandom.uniform(key_x, (), minval=0.2 - delta, maxval=0.2 + delta),
-                         y=jrandom.uniform(key_y, (), minval=0.2 - delta, maxval=0.2 + delta),
-                         z=jrandom.uniform(key_z, (), minval=0.2 - delta, maxval=0.2 + delta),
+        state = EnvState(x=jrandom.uniform(key_x, (), minval=start_point - delta, maxval=start_point + delta),
+                         y=jrandom.uniform(key_y, (), minval=start_point - delta, maxval=start_point + delta),
+                         z=jrandom.uniform(key_z, (), minval=start_point - delta, maxval=start_point + delta),
                          time=0)
 
         return self.get_obs(state), state

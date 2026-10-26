@@ -15,7 +15,7 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    init_mu: float = 2
+    init_mu: float = 1.999  # exactly 2 collapses every floating point orbit onto 0 within ~55 steps
 
     max_control: float = 0.1
     maximum_max_control: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling

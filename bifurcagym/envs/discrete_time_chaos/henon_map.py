@@ -40,8 +40,9 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 
         self.start_point: float = 0.0
         self.random_start: bool = True
-        self.random_start_range_lower: float = -1.4
-        self.random_start_range_upper: float = 1.4
+        # Box inside the basin of attraction (x in [-1, 1], y in [-0.3, 0.3]), wider boxes diverge to infinity
+        self.random_start_range_lower: chex.Array = jnp.array((-1.0, -0.3))
+        self.random_start_range_upper: chex.Array = jnp.array((1.0, 0.3))
         self.fixed_point: chex.Array = jnp.array((0.631354477, 0.189406343), dtype=jnp.float64)
         self.reward_ball: float = 0.001
 
@@ -75,15 +76,11 @@ class HenonMapCSCA(base_env.BaseEnvironment):
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
         same_state = EnvState(x=jnp.array(self.start_point), y=jnp.array(self.start_point), time=0)
-        random_state = EnvState(x=jrandom.uniform(_key,
-                                                  shape=(),
-                                                  minval=self.random_start_range_lower,
-                                                  maxval=self.random_start_range_upper),
-                                y=jrandom.uniform(_key,
-                                                  shape=(),
-                                                  minval=self.random_start_range_lower,
-                                                  maxval=self.random_start_range_upper),
-                                time=0)
+        rand_xy = jrandom.uniform(_key,
+                                  shape=(2,),
+                                  minval=self.random_start_range_lower,
+                                  maxval=self.random_start_range_upper)
+        random_state = EnvState(x=rand_xy[0], y=rand_xy[1], time=0)
 
         state = jax.tree.map(lambda x, y: jax.lax.select(self.random_start, x, y), random_state, same_state)
 
