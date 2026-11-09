@@ -19,7 +19,7 @@ class EnvParams:
     rho: float = 28.0
     beta: float = 8.0 / 3.0
 
-    max_control: chex.Array = jnp.array((2.0, 5.0, 0.5))  # 2.0  # 5.0  # rho perturbation bound
+    max_control: chex.Array = struct.field(default_factory=lambda: jnp.array((2.0, 5.0, 0.5)))  # 2.0  # 5.0  # rho perturbation bound
     maximum_max_control: chex.Array = struct.field(False, default=2.0)  # maximum to ensure correct scaling
 
 

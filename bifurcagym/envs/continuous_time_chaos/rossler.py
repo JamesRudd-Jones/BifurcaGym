@@ -20,8 +20,8 @@ class EnvParams:
     b: float = 0.2
     c: float = 5.7
 
-    max_control: chex.Array = jnp.array((0.01, 0.01, 1.0))
-    maximum_max_control: chex.Array = struct.field(False, default=jnp.array((0.01, 0.01, 1.0)))  # maximum to ensure correct scaling
+    max_control: chex.Array = struct.field(default_factory=lambda: jnp.array((0.01, 0.01, 1.0)))
+    maximum_max_control: chex.Array = struct.field(False, default_factory=lambda: jnp.array((0.01, 0.01, 1.0)))  # maximum to ensure correct scaling
 
     @property
     def fixed_point(self) -> chex.Array:

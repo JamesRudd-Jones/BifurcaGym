@@ -22,7 +22,10 @@ from bifurcagym.envs.discrete_time_chaos import (henon_map,
                                                  tinkerbell_map,
                                                  )
 from bifurcagym.envs.fluid_control import (fluidic_pinball,
+                                           hydrogym_env,
                                            )
+from bifurcagym.envs.locomotion import (mujoco_locomotion,
+                                        )
 from bifurcagym.envs.other_envs import (ays_iam,
                                         )
 from bifurcagym.wrappers import (AutoResetWrapper,
@@ -236,6 +239,42 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
+    elif env_id == "HydroGym-Kolmogorov-v0":
+        if cont_state and cont_action:
+            env = hydrogym_env.KolmogorovFlowCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = hydrogym_env.KolmogorovFlowCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
+    elif env_id == "HydroGym-Channel-v0":
+        if cont_state and cont_action:
+            env = hydrogym_env.ChannelFlowCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            raise ValueError("No Discrete Action version, 3^24 action combinations.")
+        else:
+            raise ValueError("No Discrete State version.")
+
+
+
+    # # # Locomotion
+    ####################################################################################################################
+    elif env_id == "Hopper-v0":
+        if cont_state and cont_action:
+            env = mujoco_locomotion.HopperCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = mujoco_locomotion.HopperCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
+    elif env_id == "Walker2d-v0":
+        if cont_state and cont_action:
+            env = mujoco_locomotion.Walker2dCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = mujoco_locomotion.Walker2dCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
 
 
     # # # Other Environments
@@ -302,5 +341,9 @@ registered_envs = ["Acrobot-v0",
                    "TentMap-v0",
                    "TinkerbellMap-v0",
                    "FluidicPinball-v0",
+                   "HydroGym-Kolmogorov-v0",
+                   "HydroGym-Channel-v0",
+                   "Hopper-v0",
+                   "Walker2d-v0",
                    "AYSIAM-v0"
                    ]

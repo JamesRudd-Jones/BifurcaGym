@@ -12,7 +12,7 @@ dependencies = [
     "flax>=0.10.6",
     "chex>=0.1.90",
 ]
-requires-python = "==3.10.*"
+requires-python = ">=3.11,<3.13"
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -32,6 +32,13 @@ experimental = [
 cuda = [
     "jax[cuda12]==0.6.0",
 ]
+# HydroGym's JAX backend envs, the wrapper uses hydrogym internals so pinned to the 1.0 series
+hydrogym = [
+    "hydrogym[jax]~=1.0.0",
+]
+mujoco = [
+    "mujoco-mjx>=4.0.0",
+]
 
 [build-system]
 requires = ["pdm-backend"]
@@ -44,10 +51,11 @@ verify_ssl = true
 type = "find_links"
 
 [tool.pdm.scripts]
-test.cmd = "pytest -n auto --maxprocesses 8 --dist load"
-test-all.cmd = "pytest -n auto --maxprocesses 8 --dist load -m ''"
-test-physics.cmd = "pytest -n auto --maxprocesses 8 --dist load -m physics tests/physics"
-# test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
+# The memory cap stops the test run, rather than the whole machine, if the workers use too much RAM. The threads used by
+# each worker are limited in tests/conftest.py
+test.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load"
+test-all.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load -m ''"
+test-physics.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load -m physics tests/physics"
 lint.shell = "ruff check ."
 fmt.shell = "ruff check --fix ."
 
@@ -90,7 +98,7 @@ single-line-exclusions = ["typing"]
 # https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html
 [tool.black]
 line-length = 88
-target-version = ['py310']
+target-version = ['py311']
 include = '\.pyi?$'
 exclude = '''
 /(

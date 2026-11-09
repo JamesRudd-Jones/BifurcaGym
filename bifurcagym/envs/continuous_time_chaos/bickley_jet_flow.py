@@ -20,8 +20,8 @@ class EnvParams:
     U0: float = 0.6266
     L: float = 1.0
 
-    k: chex.Array = jnp.array([2.0 * 1.0, 2.0 * 2.0, 2.0 * 3.0]) / 6.371
-    epsilon: chex.Array = jnp.array([0.0075, 0.15, 0.3])
+    k: chex.Array = struct.field(default_factory=lambda: jnp.array([2.0 * 1.0, 2.0 * 2.0, 2.0 * 3.0]) / 6.371)
+    epsilon: chex.Array = struct.field(default_factory=lambda: jnp.array([0.0075, 0.15, 0.3]))
 
     max_speed: float = 0.1
     maximum_max_speed: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling

@@ -43,12 +43,14 @@ computation as well as for using the reward function if we do not look to learn 
 
 ## Installation
 
-BifurcaGym uses [PDM](https://pdm-project.org) and Python 3.10.
+BifurcaGym uses [PDM](https://pdm-project.org) and Python 3.11 or 3.12.
 
 ```bash
 pdm install                   # CPU
 pdm install -G cuda           # NVIDIA GPU (CUDA 12)
 pdm install -G baselines      # adds optax, distrax and wandb for the PPO baseline
+pdm install -G hydrogym       # adds HydroGym for the HydroGym-* fluid control envs
+pdm install -G mujoco         # adds MuJoCo and MJX for the Hopper and Walker2d locomotion envs
 ```
 
 ## Quick Start
@@ -103,10 +105,26 @@ available (it is also unavailable for discrete state versions, as observations a
 | Tent Map | `TentMap-v0` | D/C | D/C | 1 | 1 | Y | [Info](https://en.wikipedia.org/wiki/Tent_map) |
 | Tinkerbell Map | `TinkerbellMap-v0` | C | D/C | 2 | 2 | N | [Info](https://www.starsandus.com/post/the-tinkerbell-map) |
 | Fluidic Pinball | `FluidicPinball-v0` | C (partial) | D/C | 360 | 3 | Y |  |
+| Kolmogorov Flow (HydroGym) | `HydroGym-Kolmogorov-v0` | C (partial) | D/C | 64 | 4 | Y | [Code](https://github.com/dynamicslab/hydrogym); [Paper](https://proceedings.mlr.press/v283/lagemann25a.html) |
+| Turbulent Channel Flow (HydroGym) | `HydroGym-Channel-v0` | C (partial) | C | 128 | 24 | Y | [Code](https://github.com/dynamicslab/hydrogym); [Paper](https://proceedings.mlr.press/v283/lagemann25a.html) |
+| Hopper (MJX) | `Hopper-v0` | C (partial) | D/C | 11 | 3 | Y | [Code](https://gymnasium.farama.org/environments/mujoco/hopper/); [Info](https://mujoco.readthedocs.io/en/stable/mjx.html) |
+| Walker2d (MJX) | `Walker2d-v0` | C (partial) | D/C | 17 | 6 | Y | [Code](https://gymnasium.farama.org/environments/mujoco/walker2d/); [Info](https://mujoco.readthedocs.io/en/stable/mjx.html) |
 | AYS Integrated Assessment Model | `AYSIAM-v0` | C | D/C | 3 | 2 | Y | [Code](https://github.com/fstrnad/pyDRLinWESM) |
 
-Further environments (non-stationary boat in a current, multi-agent AYS, more fluid control tasks) are work in progress
-and are not yet registered; see [ROADMAP.md](ROADMAP.md).
+For CFD-scale flow control we wrap [HydroGym](https://github.com/dynamicslab/hydrogym) rather than reimplementing it.
+The `HydroGym-*` envs expose HydroGym's pure JAX environments through the BifurcaGym API (jit, vmap and all wrappers)
+and need `pdm install -G hydrogym`. HydroGym's Firedrake, MAIA and NEK5000 environments cannot be jitted, so use
+HydroGym directly for those. `HydroGym-Kolmogorov-v0` adds a seeded initial vorticity perturbation (`init_noise`, 0
+reproduces HydroGym's fixed reset), and `HydroGym-Channel-v0` downloads its initial field from HuggingFace on first use.
+
+`Hopper-v0` and `Walker2d-v0` port Gymnasium's MuJoCo v5 tasks to [MJX](https://mujoco.readthedocs.io/en/stable/mjx.html)
+and need `pdm install -G mujoco`. Rewards, termination, frame skip, reset noise and observations follow the Gymnasium
+defaults, except that the torso pitch is wrapped to [-pi, pi] and the solver warm start is not carried between steps.
+The discrete action versions are bang bang, with each joint torque in {0, +max, -max}. Expect around 40 s of jit
+compilation per env on CPU.
+
+Further environments (non-stationary boat in a current, multi-agent AYS, an ROV navigating a chaotic flow) are work in
+progress and are not yet registered; see [ROADMAP.md](ROADMAP.md).
 
 ## Baselines
 
@@ -117,9 +135,11 @@ pdm run python baselines/ppo_baseline.py --env Pendulum-v0 --cont-action --total
 ## Testing
 
 ```bash
-JAX_PLATFORMS=cpu pdm run test        # all registered envs, skips slow (FluidicPinball) and render tests
-JAX_PLATFORMS=cpu pdm run test-all    # everything
+pdm run test        # all registered envs, skips slow (FluidicPinball, HydroGym-Channel, Hopper, Walker2d) and render tests
+pdm run test-all    # everything
 ```
+
+These run on the CPU with 4 workers, limited threads per worker and a 16 GB memory cap, using `systemd-run` so Linux only. Elsewhere call `pytest -n 4 --dist load` directly, the thread limits are set in `tests/conftest.py`.
 
 ## Citation
 

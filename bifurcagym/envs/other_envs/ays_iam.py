@@ -37,8 +37,8 @@ class EnvParams:
     phi: float = 4.7e10
 
     # Fixed points for termination conditions
-    green_fp: chex.Array = struct.field(False, default=jnp.array([0.0, 1.0, 1.0]))
-    black_fp: chex.Array = struct.field(False, default=jnp.array([0.6, 0.4, 0.0]))
+    green_fp: chex.Array = struct.field(False, default_factory=lambda: jnp.array([0.0, 1.0, 1.0]))
+    black_fp: chex.Array = struct.field(False, default_factory=lambda: jnp.array([0.6, 0.4, 0.0]))
     final_radius: float = struct.field(False, default=0.05)
 
     @property

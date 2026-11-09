@@ -21,7 +21,7 @@ class EnvState(base_env.EnvState):
 @struct.dataclass
 class EnvParams:
     values = jnp.array([-1, 0, 1])
-    action_array: chex.Array = struct.field(False, default=jnp.array(jnp.meshgrid(values, values, values)).T.reshape(-1, 3))
+    action_array: chex.Array = struct.field(False, default_factory=lambda: jnp.array(jnp.meshgrid(EnvParams.values, EnvParams.values, EnvParams.values)).T.reshape(-1, 3))
     burn_in_steps: int = struct.field(False, default=2000)
     downsample_val: int = struct.field(False, default=20)
     max_steps_in_ep: int = struct.field(False, default=1000)
@@ -32,12 +32,12 @@ class EnvParams:
     reynolds: float = 105.0  # Re < 15: Steady, Re ~ 100: Vortex Shedding, Re > 115: Chaotic
 
     # D2Q9 constraints
-    w: chex.Array = struct.field(False, default=jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36]))
-    idxs: chex.Array = struct.field(False, default=jnp.arange(9))
-    c: chex.Array = struct.field(False, default=jnp.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1],
-                                                                        [1, 1], [-1, 1], [-1, -1], [1, -1]]))
+    w: chex.Array = struct.field(False, default_factory=lambda: jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36]))
+    idxs: chex.Array = struct.field(False, default_factory=lambda: jnp.arange(9))
+    c: chex.Array = struct.field(False, default_factory=lambda: jnp.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1],
+                                                                                        [1, 1], [-1, 1], [-1, -1], [1, -1]]))
     # Inverse directions for bounce-back
-    opp_idxs: chex.Array = struct.field(False, default=jnp.array([0, 3, 4, 1, 2, 7, 8, 5, 6]))
+    opp_idxs: chex.Array = struct.field(False, default_factory=lambda: jnp.array([0, 3, 4, 1, 2, 7, 8, 5, 6]))
 
     radius: int = struct.field(False, default=10)
 
