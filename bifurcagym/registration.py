@@ -1,3 +1,5 @@
+import jax
+
 from bifurcagym.envs.classical_control import (acrobot,
                                                cartpole,
                                                n_cartpole,
@@ -36,16 +38,27 @@ from bifurcagym.wrappers import (AutoResetWrapper,
                                  )
 
 
+# JAX's x64 flag is process wide, so every env made in a process has to use the same precision
+_selected_x64 = None
+
+
 def make(env_id: str,
          cont_state: bool=False,
          cont_action: bool=False,
          normalised: bool=False,
          autoreset: bool=False,
          metrics: bool=False,
+         x64: bool=True,
          **env_kwargs):
+    global _selected_x64
 
     if env_id not in registered_envs:
         raise ValueError(f"{env_id} is not in registered environments.")
+
+    if _selected_x64 is not None and _selected_x64 != x64:
+        raise ValueError(f"Cannot make {env_id} with x64={x64}, an env in this process already uses x64={_selected_x64}.")
+
+    jax.config.update("jax_enable_x64", x64)
 
 
 
@@ -291,6 +304,12 @@ def make(env_id: str,
 
     else:
         raise ValueError("Environment ID is not registered.")
+
+    # # # Precision, some envs need float64 and importing HydroGym's channel flow enables x64 regardless of the setting
+    ####################################################################################################################
+    if not x64 and (env.requires_float64 or jax.config.jax_enable_x64):
+        raise ValueError(f"{env_id} requires x64=True.")
+    _selected_x64 = x64
 
     # # # Periodic wrapper that auto checks if env has periodic dimensions
     ####################################################################################################################

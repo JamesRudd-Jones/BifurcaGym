@@ -7,9 +7,6 @@ from bifurcagym.envs import EnvState, EnvParams
 from bifurcagym import spaces
 
 
-jax.config.update("jax_enable_x64", True)
-
-
 class NormalisedEnvCSDA(object):
     """
     Normalises obs and rewards
@@ -103,10 +100,11 @@ class NormalisedEnvCSDA(object):
         return (obs / 2.0) * self.unnorm_obs_space_range(params)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(low=-jnp.ones_like(self.unnorm_obs_space(params)),
-                          high=jnp.ones_like(self.unnorm_obs_space(params)),
-                          shape=self.unnorm_obs_space(params).shape,
-                          dtype=self.unnorm_obs_space(params).dtype)
+        unnorm_space = self.unnorm_obs_space(params)
+        return spaces.Box(low=-jnp.ones(unnorm_space.shape),
+                          high=jnp.ones(unnorm_space.shape),
+                          shape=unnorm_space.shape,
+                          dtype=unnorm_space.dtype)
 
     def __getattr__(self, attr):
         if attr == "_wrapped_normalised_env":
@@ -178,7 +176,8 @@ class NormalisedEnvCSCA(NormalisedEnvCSDA):
         return action
 
     def action_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(low=-jnp.ones_like(self.unnorm_action_space(params)),
-                          high=jnp.ones_like(self.unnorm_action_space(params)),
-                          shape=self.unnorm_action_space(params).shape,
-                          dtype=self.unnorm_action_space(params).dtype)
+        unnorm_space = self.unnorm_action_space(params)
+        return spaces.Box(low=-jnp.ones(unnorm_space.shape),
+                          high=jnp.ones(unnorm_space.shape),
+                          shape=unnorm_space.shape,
+                          dtype=unnorm_space.dtype)

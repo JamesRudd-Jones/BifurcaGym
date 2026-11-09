@@ -76,6 +76,13 @@ obs_gen, delta_obs_gen, state_gen, reward_gen, done_gen, _ = env.generative_step
 Because `env_params` is passed explicitly, environments can be `jax.vmap`-ed over both keys and parameters, for
 example to sweep a bifurcation parameter or apply non-stationary changes.
 
+### Precision
+
+`make` runs in 64-bit by default. Pass `x64=False` for 32-bit, which is available for Pendulum, CartPole, WetChicken,
+AYS-IAM, FluidicPinball, HydroGym-Kolmogorov, Hopper and Walker2d. The chaotic systems need float64, so `make` raises
+an error if they are requested in 32-bit. This sets JAX's process wide `jax_enable_x64` flag, so every env made in a
+process has to use the same precision, and arrays created before the first `make` follow the flag at that time.
+
 ## Environments
 
 `C` = continuous, `D` = discrete, `D/C` = both are available through `cont_state` / `cont_action` in `make`.

@@ -61,7 +61,7 @@ def test_unactuated_robot_settles(env_cls):
     _, state = env.reset(params, jrandom.key(0))
     zero = jnp.zeros(env.action_dim)
 
-    final_state, _ = rollout(env, params, state, jnp.zeros((2000, env.action_dim)))
+    final_state, _ = rollout(env, params, state, jnp.zeros((8000, env.action_dim)))
     assert float(jnp.max(jnp.abs(final_state.qvel))) < 1e-3
 
     def step_fn(x):

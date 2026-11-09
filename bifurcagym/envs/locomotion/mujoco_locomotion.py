@@ -101,11 +101,12 @@ class HopperCSCA(base_env.BaseEnvironment):
 
         # Observation bounds: z, pitch, joint ranges (with slack as MuJoCo joint limits are soft), clipped velocities
         joint_range = self.mj_model.jnt_range[3:]
+        joint_slack = 0.5
         self.obs_low: chex.Array = jnp.concatenate((jnp.array((-0.5, -jnp.pi)),
-                                                    joint_range[:, 0] - 0.2,
+                                                    joint_range[:, 0] - joint_slack,
                                                     -self.max_obs_velocity * jnp.ones(self.nv)))
         self.obs_high: chex.Array = jnp.concatenate((jnp.array((3.0, jnp.pi)),
-                                                     joint_range[:, 1] + 0.2,
+                                                     joint_range[:, 1] + joint_slack,
                                                      self.max_obs_velocity * jnp.ones(self.nv)))
         self.obs_dim: int = self.obs_low.shape[0]
 
