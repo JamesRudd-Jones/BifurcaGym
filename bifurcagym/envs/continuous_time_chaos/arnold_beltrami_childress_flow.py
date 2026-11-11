@@ -29,8 +29,19 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
     State evolves via Euler integration.
     """
 
-    def __init__(self, **env_kwargs):
+    def __init__(self, lipschitz_reward: bool = False, random_start: bool = False, **env_kwargs):
+        """
+        lipschitz_reward: reward is minus the torus distance to the goal and episodes end only at the time limit, so
+            the reward is 1-Lipschitz and there is no goal-termination discontinuity. Default is the -0.01 per step,
+            +10 at the goal, terminating reward.
+        random_start: uniform start over the torus, at least start_exclusion from the goal. Default is within 0.001
+            of (0.2, 0.2, 0.2).
+        """
         super().__init__(**env_kwargs)
+
+        self.lipschitz_reward = lipschitz_reward
+        self.random_start = random_start
+        self.start_exclusion = 0.3
 
         # ABC is typically defined on [0, 2π)^3 with periodic boundaries (torus)
         self.L = 2.0 * jnp.pi
@@ -97,6 +108,13 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         # state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), z=jnp.array(0.2), time=0)
 
+        if self.random_start:
+            low = jnp.array((self.x_bounds[0], self.y_bounds[0], self.z_bounds[0]))
+            high = jnp.array((self.x_bounds[1], self.y_bounds[1], self.z_bounds[1]))
+            start = base_env.uniform_away_from_goal(key, low, high, self._torus_dist_to_goal, self.start_exclusion)
+            state = EnvState(x=start[0], y=start[1], z=start[2], time=0)
+            return self.get_obs(state), state
+
         key_x, key_y, key_z = jrandom.split(key, 3)
         delta = 0.001
         start_point = 0.2
@@ -115,12 +133,23 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
         d = a - b
         return (d + 0.5 * self.L) % self.L - 0.5 * self.L
 
+    def _torus_dist_to_goal(self, point: chex.Array) -> chex.Array:
+        """
+        Shortest distance on the torus from point (x, y, z) to the goal, which is 1-Lipschitz in point.
+        """
+        delta = self._torus_delta(point, self.goal_state)
+        return jnp.sqrt(jnp.sum(delta * delta))
+
     def reward_and_done_function(self,
                                 input_action_t: Union[jnp.int_, jnp.float_, chex.Array],
                                 state_t: EnvState,
                                 state_tp1: EnvState,
                                 key: chex.PRNGKey = None,
                                 ) -> Tuple[chex.Array, chex.Array]:
+        if self.lipschitz_reward:
+            dist_tp1 = self._torus_dist_to_goal(jnp.array((state_tp1.x, state_tp1.y, state_tp1.z)))
+            return -dist_tp1, state_tp1.time >= self.max_steps_in_episode
+
         # Distance to target on torus with periodic BCs
         dx = self._torus_delta(state_t.x, self.goal_state[0])
         dy = self._torus_delta(state_t.y, self.goal_state[1])

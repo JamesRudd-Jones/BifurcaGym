@@ -18,8 +18,18 @@ class EnvState(base_env.EnvState):
 
 class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
 
-    def __init__(self, **env_kwargs):
+    def __init__(self, lipschitz_reward: bool = False, random_start: bool = False, **env_kwargs):
+        """
+        lipschitz_reward: reward is minus the distance to the goal and episodes end only at the time limit, so the
+            reward is 1-Lipschitz and there is no goal-termination discontinuity. Default is the -0.01 per step, +10 at
+            the goal, terminating reward.
+        random_start: uniform start over the domain, at least start_exclusion from the goal. Default is fixed (0.2, 0.2).
+        """
         super().__init__(**env_kwargs)
+
+        self.lipschitz_reward = lipschitz_reward
+        self.random_start = random_start
+        self.start_exclusion = 0.3
 
         # TODO do we need float 64?
 
@@ -79,8 +89,14 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
         return u_flow, v_flow
 
     def reset_env(self, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
-        # key, _key = jrandom.split(key)
-        state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), time=0)
+        if self.random_start:
+            low = jnp.array((self.x_bounds[0], self.y_bounds[0]))
+            high = jnp.array((self.x_bounds[1], self.y_bounds[1]))
+            start = base_env.uniform_away_from_goal(key, low, high, lambda s: jnp.linalg.norm(s - self.goal_state),
+                                                    self.start_exclusion)
+            state = EnvState(x=start[0], y=start[1], time=0)
+        else:
+            state = EnvState(x=jnp.array(0.2), y=jnp.array(0.2), time=0)
 
         return self.get_obs(state), state
 
@@ -90,6 +106,10 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
                                  state_tp1: EnvState,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
+        if self.lipschitz_reward:
+            dist_tp1 = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y)) - self.goal_state)
+            return -dist_tp1, state_tp1.time >= self.max_steps_in_episode
+
         dist_to_target = jnp.linalg.norm(jnp.array((state_t.x, state_t.y)) - self.goal_state)
         done = dist_to_target < 0.1
 
