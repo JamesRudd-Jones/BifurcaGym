@@ -7,6 +7,7 @@ from typing import Any, Dict, Tuple
 import chex
 from flax import struct
 import jax
+import jax.random as jrandom
 import abc
 
 
@@ -20,10 +21,25 @@ class EnvParams:
     max_steps_in_ep: int = 1
 
 
+def uniform_away_from_goal(key: chex.PRNGKey, low: chex.Array, high: chex.Array, dist_to_goal, exclusion: float):
+    """
+    Uniform sample over the box [low, high], resampled until dist_to_goal(sample) >= exclusion. Used for random starts.
+    """
+    def sample(carry):
+        key, _ = carry
+        key, _key = jrandom.split(key)
+        return key, jrandom.uniform(_key, low.shape, minval=low, maxval=high, dtype=low.dtype)
+
+    _, start = jax.lax.while_loop(lambda carry: dist_to_goal(carry[1]) < exclusion, sample, sample((key, low)))
+    return start
+
+
 class BaseEnvironment(abc.ABC):
 
-    def __init(self, **env_kwargs):
-        pass
+    def __init__(self, **env_kwargs):
+        # envs pop the kwargs they support before calling this, so anything left is a typo or unsupported option
+        if env_kwargs:
+            raise TypeError(f"{type(self).__name__} got unsupported env kwargs: {sorted(env_kwargs)}")
 
     @property
     def default_params(self) -> EnvParams:
