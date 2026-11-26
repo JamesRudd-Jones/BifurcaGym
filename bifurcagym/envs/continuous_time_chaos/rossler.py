@@ -21,7 +21,7 @@ class EnvParams:
     c: float = 5.7
 
     max_control: chex.Array = struct.field(default_factory=lambda: jnp.array((0.01, 0.01, 1.0)))
-    maximum_max_control: chex.Array = struct.field(False, default_factory=lambda: jnp.array((0.01, 0.01, 1.0)))  # maximum to ensure correct scaling
+    maximum_max_control: Tuple[float, float, float] = struct.field(False, default=(0.01, 0.01, 1.0))
 
     @property
     def fixed_point(self) -> chex.Array:
@@ -31,13 +31,11 @@ class EnvParams:
           x + a y = 0 => x = -a y = a z
           b + z(x - c) = 0 => b + z(a z - c) = 0 => a z^2 - c z + b = 0
 
-        Choose the "+" root (often the one relevant in chaos-control demos), but you can swap if desired.
         """
         a, b, c = self.a, self.b, self.c
         disc = c * c - 4.0 * a * b
-        # guard against numerical negatives
         disc = jnp.maximum(disc, 0.0)
-        z = (c + jnp.sqrt(disc)) / (2.0 * a)
+        z = (c - jnp.sqrt(disc)) / (2.0 * a)
         x = a * z
         y = -z
         return jnp.array([x, y, z], dtype=jnp.float64)
@@ -70,7 +68,7 @@ class RosslerCSCA(base_env.BaseEnvironment):
         self.random_start: bool = False
         self.random_start_low: chex.Array = jnp.array([-5.0, -5.0, 0.0], dtype=jnp.float64)
         self.random_start_high: chex.Array = jnp.array([5.0, 5.0, 10.0], dtype=jnp.float64)
-        self.reward_ball: float = 1e-2
+        self.reward_scale: float = 6.0  # mean distance of the uncontrolled attractor from the fixed point
 
     @property
     def default_params(self) -> EnvParams:
@@ -125,12 +123,11 @@ class RosslerCSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = state_tp1.x - params.fixed_point
-        reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
+        reward = jnp.exp(-jnp.linalg.norm(err) / self.reward_scale)
 
-        state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_ep
         boundary_done = jnp.linalg.norm(state_tp1.x) > 1e3
-        done = jnp.logical_or(jnp.logical_or(state_done, boundary_done), time_done)
+        done = jnp.logical_or(boundary_done, time_done)
 
         return reward, done
 
@@ -198,7 +195,8 @@ class RosslerCSCA(base_env.BaseEnvironment):
         return "Rossler-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(self.num_actions,), dtype=jnp.float64)
+        high = jnp.array(params.maximum_max_control, dtype=jnp.float64)
+        return spaces.Box(-high, high, shape=(self.num_actions,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         # Rossler is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation

@@ -6,7 +6,6 @@ from bifurcagym import spaces
 from flax import struct
 from typing import Any, Dict, Tuple
 import chex
-from bifurcagym.envs import utils
 
 
 @struct.dataclass
@@ -19,7 +18,7 @@ class EnvState(base_env.EnvState):
 class EnvParams:
     a: float = 0.9
     b: float = -0.6013
-    c: float = 2.0
+    c: float = 1.8
     d: float = 0.5
 
     max_control: float = 0.05  # perturbation to a
@@ -37,14 +36,13 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
 
         self.requires_float64: bool = True
 
-        # Canonical initial condition, the basin of attraction is irregular so random starts are kept close to it
         self.start_point: chex.Array = jnp.array([-0.72, -0.64], dtype=jnp.float64)
         self.random_start: bool = True
         self.random_start_low: chex.Array = self.start_point - 0.2
         self.random_start_high: chex.Array = self.start_point + 0.2
-        self.reward_ball: float = 0.001
-        # Precompute a fixed point (solve map(s) - s = 0)
-        self.fixed_point = self._compute_fixed_point(self.default_params)
+        self.reward_scale: float = 0.5  # mean distance of the uncontrolled attractor from the fixed point
+        self.escape_bound: float = 2.5
+        self.fixed_point: chex.Array = jnp.zeros(2, dtype=jnp.float64)
 
     @property
     def default_params(self) -> EnvParams:
@@ -81,27 +79,6 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
 
         return jnp.array((xn1, yn1))
 
-    def _compute_fixed_point(self, params: EnvParams) -> chex.Array:
-        # Fixed points satisfy map(s, u=0) - s = 0
-        def F(xy):
-            return self._map(xy, jnp.zeros(2), params) - xy
-
-        init_seeds = jnp.array(((0.0, 2.0),
-                                (0.2, 0.2),
-                                (-0.2, 0.2),
-                                (0.5, -0.5)), dtype=jnp.float64)
-        # TODO should the above be randomised idk with more options?
-
-        sols = jax.vmap(utils.newton_solve_2d, in_axes=(None, 0))(F, init_seeds)
-        residuals = jax.vmap(lambda x: jnp.linalg.norm(F(x)))(sols)
-        best = int(jnp.argmin(residuals))
-
-        # sols = [utils.newton_solve_2d(F, s0) for s0 in seeds]
-        # residuals = [jnp.linalg.norm(F(sol)) for sol in sols]
-        # best = int(jnp.argmin(jnp.array(residuals)))
-
-        return sols[best]
-
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         key, _key = jrandom.split(key)
         same_state = EnvState(x=self.start_point[0], y=self.start_point[1], time=0)
@@ -120,14 +97,13 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
-        reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
+        reward = jnp.exp(-jnp.linalg.norm(err) / self.reward_scale)
 
-        state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_ep
 
-        diverged = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y))) > 1e3
+        diverged = jnp.any(jnp.abs(jnp.array((state_tp1.x, state_tp1.y))) > self.escape_bound)
 
-        done = jnp.logical_or(jnp.logical_or(state_done, time_done), diverged)
+        done = jnp.logical_or(time_done, diverged)
 
         return reward, done
 
@@ -192,8 +168,8 @@ class TinkerbellMapCSCA(base_env.BaseEnvironment):
         return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(2,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        # TinkerbellMap is unbounded in principle so giving wide bounds  # TODO unsure how to fix this for normalisation
-        return spaces.Box(-1e6, 1e6, shape=(2,), dtype=jnp.float64)
+        # episodes end on leaving the escape box, so only the final observation can lie outside it
+        return spaces.Box(-self.escape_bound, self.escape_bound, shape=(2,), dtype=jnp.float64)
 
 
 class TinkerbellMapCSDA(TinkerbellMapCSCA):

@@ -17,8 +17,8 @@ class EnvState(base_env.EnvState):
 @struct.dataclass
 class EnvParams:
     # for now links are standardised to be the same
-    max_speed: float = 8.0
-    maximum_max_speed: float = struct.field(False, default=8.0)  # maximum to ensure correct scaling
+    max_speed: float = 60.0
+    maximum_max_speed: float = struct.field(False, default=60.0)  # maximum to ensure correct scaling
     gravity: float = 10.0
     mass: float = 1.0
     length: float = 1.0
@@ -29,8 +29,9 @@ class EnvParams:
 
 class NPendulumCSDA(base_env.BaseEnvironment):
     """
-    N-link pendulum environment where control torque is applied only at the base joint (index 0)
-    Angles are relative joint angles; absolute link orientation = cumsum(theta)
+    N-link pendulum swing up, where control torque is applied only at the base joint (index 0)
+    Angles are relative joint angles; absolute link orientation = cumsum(theta), 0 is hanging down and pi is upright
+    (unlike Pendulum-v0 where 0 is upright). Episodes start near hanging and the goal is every link upright
     Links are uniform rods; the full equations of motion (including inertial coupling) come from the Lagrangian via
     autodiff, see kinetic_energy and potential_energy
     """
@@ -96,7 +97,7 @@ class NPendulumCSDA(base_env.BaseEnvironment):
         v_joint_x = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(L * phi_dot * jnp.cos(phi))[:-1]])
         v_joint_y = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(L * phi_dot * jnp.sin(phi))[:-1]])
 
-        # Velocities of centre of mass (COM) for each link (assuming uniform rods)
+        # Velocities of centre of mass (COM) for each link
         v_com_x = v_joint_x + (L / 2) * phi_dot * jnp.cos(phi)
         v_com_y = v_joint_y + (L / 2) * phi_dot * jnp.sin(phi)
 
@@ -117,10 +118,8 @@ class NPendulumCSDA(base_env.BaseEnvironment):
         dy = -L * jnp.cos(phi)
         joint_y = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(dy)[:-1]])
 
-        # COM Y-positions
         com_y = joint_y - (L / 2) * jnp.cos(phi)
 
-        # V = m * g * h
         V = jnp.sum(m * params.gravity * com_y)
         return V
 
@@ -144,11 +143,9 @@ class NPendulumCSDA(base_env.BaseEnvironment):
         # Apply control torque ONLY at the base joint
         tau = jnp.zeros(n).at[0].set(jnp.squeeze(u))
 
-        # Mass matrix M(q) is the Hessian of Kinetic Energy wrt velocities
         M = jax.hessian(self.kinetic_energy, argnums=1)(q, q_dot, params)
         bias = self.compute_bias(q, q_dot, params)
 
-        # Solve M * q_ddot = tau - bias
         q_ddot = jnp.linalg.solve(M, tau - bias)
 
         return jnp.concatenate([q_dot, q_ddot])
@@ -177,8 +174,9 @@ class NPendulumCSDA(base_env.BaseEnvironment):
                                  params: EnvParams,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
+        # Error of each link's absolute angle from upright (pi)
         angle_abs_tp1 = jnp.cumsum(state_tp1.theta)
-        cost_angles = jnp.sum(self._angle_normalise(angle_abs_tp1) ** 2)
+        cost_angles = jnp.sum(self._angle_normalise(angle_abs_tp1 - jnp.pi) ** 2)
         cost_vel = 0.1 * jnp.sum(state_tp1.theta_dot ** 2)
         action_vec = self.action_convert(input_action_t, params)
         cost_action = 0.001 * jnp.sum(action_vec ** 2)
@@ -204,9 +202,8 @@ class NPendulumCSDA(base_env.BaseEnvironment):
 
         # compute link endpoints for a trajectory: theta trajectory shape (T, n_links)
         theta_traj = np.asarray(trajectory_state.theta)      # can be (T, n) or (n,) single time
-        lengths = np.asarray(params.length)
+        length = float(params.length)  # all links share one length
 
-        # Ensure theta_traj is (T, n)
         if theta_traj.ndim == 1:
             theta_traj = theta_traj[np.newaxis, ...]
         T = theta_traj.shape[0]
@@ -225,18 +222,16 @@ class NPendulumCSDA(base_env.BaseEnvironment):
                 ys.append(y)
             return np.array(xs), np.array(ys)
 
-        max_length = np.max(lengths)
-
         fig, ax = plt.subplots(figsize=(5, 5))
         ax.set_title(self.name)
-        reach = max_length * self.n_links
+        reach = length * self.n_links
         ax.set_xlim(-reach * 1.2, reach * 1.2)
         ax.set_ylim(-reach * 1.2, reach * 1.2)
         ax.set_aspect('equal')
         ax.grid(True)
 
         # initial coordinates
-        xs0, ys0 = endpoints_for_frame(theta_traj[0], lengths[0])
+        xs0, ys0 = endpoints_for_frame(theta_traj[0], length)
         line, = ax.plot([0.0] + xs0.tolist(), [0.0] + ys0.tolist(), lw=3, c='k', marker='o')
         circle_patches = []
         bob_radius = 0.08
@@ -246,7 +241,7 @@ class NPendulumCSDA(base_env.BaseEnvironment):
             circle_patches.append(circle)
 
         def update(frame):
-            xs, ys = endpoints_for_frame(theta_traj[frame], lengths[frame])
+            xs, ys = endpoints_for_frame(theta_traj[frame], length)
             line.set_data([0.0] + xs.tolist(), [0.0] + ys.tolist())
             for (circle, x_i, y_i) in zip(circle_patches, xs, ys):
                 circle.set_center((float(x_i), float(y_i)))
@@ -260,7 +255,6 @@ class NPendulumCSDA(base_env.BaseEnvironment):
                                        )
         anim.save(f"{file_path}_{self.name}.gif")
         plt.close()
-    # TODO sort out render_traj as unsure it actually works as of now
 
     @property
     def name(self) -> str:

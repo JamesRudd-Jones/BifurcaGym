@@ -40,6 +40,16 @@ mujoco = [
     "mujoco-mjx>=4.0.0",
 ]
 
+[dependency-groups]
+dev = [
+    "lxm3>=0.4.0",
+    "ruff>=0.1.11",
+    "black>=23.12.1",
+    "pytest>=7.4.4",
+    "pytest-xdist>=3.5.0",
+    "pre-commit>=3.6.0",
+]
+
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
@@ -51,13 +61,15 @@ verify_ssl = true
 type = "find_links"
 
 [tool.pdm.scripts]
-# The memory cap stops the test run, rather than the whole machine, if the workers use too much RAM. The threads used by
-# each worker are limited in tests/conftest.py
 test.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load"
 test-all.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load -m ''"
 test-physics.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load -m physics tests/physics"
 lint.shell = "ruff check ."
 fmt.shell = "ruff check --fix ."
+# test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
+# ruff lints and sorts imports only, no auto-formatter so hand-aligned layout is left alone
+lint.cmd = "ruff check ."
+fmt.cmd = "ruff check --fix ."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -70,53 +82,33 @@ markers = [
 
 [tool.ruff]
 line-length = 120
-extend-exclude = [
-    # Experimental and work in progress, see the module docstrings
-    "bifurcagym/envs/multi_agent_control",
-    "bifurcagym/envs/non_stationary",
-    "bifurcagym/envs/fluid_control/pinball_speed_test.py",
-    "bifurcagym/envs/discrete_time_chaos/bernoulli_map.py",
-]
+extend-exclude = ["scratch", "third_party", "docs"]
 
 [tool.ruff.lint]
-select = [
-    "E", # pycodestyle
-    "F", # pyflakes
-    "I", # isort
-]
-ignore = ["E731", "E501"]
+select = ["E",
+          "W",
+          "F",
+          "I",
+          "B",
+          "UP",
+          "SIM",
+          "C4",
+          "PIE",
+          "NPY",
+          "PTH",
+          ]
+ignore = ["E731",
+          "SIM108",
+          "PTH123",
+          ]
+unfixable = ["F401",  # report unused imports but never auto-delete them (eg sys kept for debugging)
+             ]
 
-[tool.ruff.lint.extend-per-file-ignores]
-"__init__.py" = ["F401"]
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports are re-exports
 
 [tool.ruff.lint.isort]
+lines-after-imports = 2
 force-single-line = true
 force-sort-within-sections = true
 single-line-exclusions = ["typing"]
-
-# Black configuration
-# https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html
-[tool.black]
-line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.github
-  | \.venv
-  | docs
-  | third_party
-  | scratch
-)/
-'''
-[dependency-groups]
-dev = [
-    "lxm3>=0.4.0",
-    "ruff>=0.1.11",
-    "black>=23.12.1",
-    "pytest>=7.4.4",
-    "pytest-xdist>=3.5.0",
-    "pre-commit>=3.6.0",
-]

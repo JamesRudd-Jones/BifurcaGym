@@ -1,4 +1,5 @@
 from typing import Any
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import chex
@@ -29,11 +30,12 @@ class Box(Space):
                  low: chex.Array | float,
                  high: chex.Array | float,
                  shape: Any,
-                 dtype: jnp.dtype = jnp.float32):
+                 dtype: jnp.dtype | None = None):
         self.low = low
         self.high = high
         self.shape = shape
-        self.dtype = dtype
+        # By default follow the precision make selected, float64 with x64 and float32 without
+        self.dtype = jax.dtypes.canonicalize_dtype(jnp.float64) if dtype is None else dtype
 
     def sample(self, key: chex.PRNGKey) -> chex.Array:
         return jrandom.uniform(key, shape=self.shape, minval=self.low, maxval=self.high).astype(self.dtype)

@@ -38,7 +38,6 @@ from bifurcagym.wrappers import (AutoResetWrapper,
                                  )
 
 
-# JAX's x64 flag is process wide, so every env made in a process has to use the same precision
 _selected_x64 = None
 
 
@@ -305,16 +304,22 @@ def make(env_id: str,
     else:
         raise ValueError("Environment ID is not registered.")
 
+
+
     # # # Precision, some envs need float64 and importing HydroGym's channel flow enables x64 regardless of the setting
     ####################################################################################################################
     if not x64 and (env.requires_float64 or jax.config.jax_enable_x64):
         raise ValueError(f"{env_id} requires x64=True.")
     _selected_x64 = x64
 
+
+
     # # # Periodic wrapper that auto checks if env has periodic dimensions
     ####################################################################################################################
     if hasattr(env, 'periodic_dim') and env.periodic_dim is not None:
         env = PeriodicWrapper(env)
+
+
 
     # # # Normalises the observation, action, and reward space
     ####################################################################################################################
@@ -327,6 +332,8 @@ def make(env_id: str,
             env = NormalisedWrapperCSCA(env)
         else:
             raise ValueError("No Normalising Wrapper for Discrete State Continuous Action.")
+
+
 
     # # # Enables an autoresetting environment that works well with jax.lax.scan, but not necessary for a for loop with conditionals that can't be Jitted
     ####################################################################################################################

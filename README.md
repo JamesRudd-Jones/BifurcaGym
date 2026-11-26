@@ -1,7 +1,7 @@
 # BifurcaGym
 
 Chaotic transition dynamics are found in many natural processes such as fluids, weather, financial systems, ecology, and 
-even multi-agent systems.
+even multi-agent systems, amongst many others.
 
 In many of these scenarios we want to learn behavioural policies towards a desired objective, such as in fluid control 
 (e.g. fluid mixing, aerofoil optimisation), financial or ecosystem control (a stable desired equilibrium), weather model 
@@ -93,8 +93,8 @@ available (it is also unavailable for discrete state versions, as observations a
 |:--|:--|:--:|:--:|:--:|:--:|:--:|:--|
 | Acrobot | `Acrobot-v0` | C | D/C | 6 | 1 | Y | [Code](https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_control/acrobot.py); [Paper](http://users.cms.caltech.edu/~murray/preprints/erl-M91-46.pdf) |
 | Cartpole | `CartPole-v0` | C | D/C | 4 | 1 | Y | [Code](https://github.com/fusion-ml/trajectory-information-rl); [Paper](https://ieeexplore.ieee.org/document/6313077) |
-| N Cartpole | `NCartPole-v0` | C | D/C | 6 | 1 | N | [Info](https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html) |
-| N Pendulum | `NPendulum-v0` | C | D/C | 4 | 1 | N |  |
+| N Cartpole | `NCartPole-v0` | C | D/C | 6 | 1 | Y | [Info](https://sharpneat.sourceforge.io/research/cart-pole/cart-pole-equations.html) |
+| N Pendulum | `NPendulum-v0` | C | D/C | 4 | 1 | Y |  |
 | Pendubot | `Pendubot-v0` | C | D/C | 6 | 1 | Y | [Paper](https://link.springer.com/chapter/10.1007/BFb0015081); [Info](https://underactuated.mit.edu/acrobot.html) |
 | Pendulum | `Pendulum-v0` | C | D/C | 2 | 1 | Y | [Code](https://github.com/fusion-ml/trajectory-information-rl) |
 | Wet Chicken | `WetChicken-v0` | D/C | D/C | 2 | 2 | Y | [Code](https://github.com/LAVA-LAB/improved_spi/blob/main/wetChicken.py); [Paper](https://www.tu-ilmenau.de/fileadmin/Bereiche/IA/neurob/Publikationen/conferences_int/2009/Hans-ICANN-2009.pdf) |
@@ -110,7 +110,7 @@ available (it is also unavailable for discrete state versions, as observations a
 | Ikeda Map | `IkedaMap-v0` | C | D/C | 2 | 1 | Y | [Info](https://en.wikipedia.org/wiki/Ikeda_map) |
 | Logistic Map | `LogisticMap-v0` | D/C | D/C | 1 | 1 | Y | [Paper](https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement); [Info](https://blbadger.github.io/logistic-map.html#mjx-eqn-eq1) |
 | Tent Map | `TentMap-v0` | D/C | D/C | 1 | 1 | Y | [Info](https://en.wikipedia.org/wiki/Tent_map) |
-| Tinkerbell Map | `TinkerbellMap-v0` | C | D/C | 2 | 2 | N | [Info](https://www.starsandus.com/post/the-tinkerbell-map) |
+| Tinkerbell Map | `TinkerbellMap-v0` | C | D/C | 2 | 2 | Y | [Info](https://www.starsandus.com/post/the-tinkerbell-map) |
 | Fluidic Pinball | `FluidicPinball-v0` | C (partial) | D/C | 360 | 3 | Y |  |
 | Kolmogorov Flow (HydroGym) | `HydroGym-Kolmogorov-v0` | C (partial) | D/C | 64 | 4 | Y | [Code](https://github.com/dynamicslab/hydrogym); [Paper](https://proceedings.mlr.press/v283/lagemann25a.html) |
 | Turbulent Channel Flow (HydroGym) | `HydroGym-Channel-v0` | C (partial) | C | 128 | 24 | Y | [Code](https://github.com/dynamicslab/hydrogym); [Paper](https://proceedings.mlr.press/v283/lagemann25a.html) |
@@ -155,7 +155,7 @@ If you use BifurcaGym in your work, please cite:
 ```bibtex
 @misc{bifurcagym,
   title  = {BifurcaGym: A Benchmark of Reinforcement Learning and Control Environments with Chaotic Dynamics},
-  author = {TODO},
+  author = {James Rudd-Jones and Mirco Musolesi and Maria Perez-Ortiz },
   year   = {2026},
 }
 ```

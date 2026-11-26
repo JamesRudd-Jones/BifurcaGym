@@ -37,7 +37,6 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         self.random_start: bool = True
         self.random_start_range_lower: float = 0.0
         self.random_start_range_upper: float = 1.0
-        self.reward_ball: float = 0.001
 
         self.init_r: float = init_r
         # init_r: float = 2.5
@@ -111,10 +110,8 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         "https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement"
         """
         reward = -jnp.abs(state_tp1.x - self.fixed_point) ** 2
-        # The above can set more specific norm distances
 
-        # TODO state_t or state_tp1
-        done = jnp.logical_or(jnp.abs(state_tp1.x - self.fixed_point) < self.reward_ball, state_tp1.time >= self.max_steps_in_ep)
+        done = state_tp1.time >= self.max_steps_in_ep
 
         return reward, done
 

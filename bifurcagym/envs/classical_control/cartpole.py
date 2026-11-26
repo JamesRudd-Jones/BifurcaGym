@@ -70,7 +70,6 @@ class CartPoleCSDA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)
 
-        # RK4 as PILCO integrates this system with ODE45, explicit Euler pumps energy into the pole at this dt
         s = jnp.array((state.x, state.theta, state.x_dot, state.theta_dot))
         ns = utils.integrate_ode(self._dsdt, state.time * self.dt, s, action, self.dt, self.substeps, params)
 
@@ -147,7 +146,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         position = jnp.array([state_tp1.x + pole_x, pole_y])
         squared_distance = jnp.sum((position - goal) ** 2)
         squared_sigma = 0.25 ** 2
-        costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
+        reward = jnp.exp(-0.5 * squared_distance / squared_sigma)
 
         done1 = jnp.logical_or(state_tp1.x < -params.x_threshold,  # TODO state_t or state_tp1
                                state_tp1.x > params.x_threshold)
@@ -164,7 +163,7 @@ class CartPoleCSDA(base_env.BaseEnvironment):
 
         fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_ep)
 
-        return -costs, fin_done
+        return reward, fin_done
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
         return self.action_array[action.squeeze()] * params.force_mag / 4

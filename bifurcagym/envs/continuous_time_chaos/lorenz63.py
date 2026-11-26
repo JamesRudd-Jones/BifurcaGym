@@ -51,7 +51,7 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
         self.random_start_low: chex.Array = jnp.array([-10.0, -10.0, 0.0], dtype=jnp.float64)
         self.random_start_high: chex.Array = jnp.array([10.0, 10.0, 30.0], dtype=jnp.float64)
         self.fixed_point: chex.Array = jnp.array([0.0, 0.0, 0.0], dtype=jnp.float64)
-        self.reward_ball: float = 1e-2
+        self.reward_scale: float = 25.0  # mean distance of the uncontrolled attractor from the fixed point
 
     @property
     def default_params(self) -> EnvParams:
@@ -104,12 +104,11 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = state_tp1.x - self.fixed_point
-        reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
+        reward = jnp.exp(-jnp.linalg.norm(err) / self.reward_scale)
 
-        state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_ep
         boundary_done = jnp.linalg.norm(state_tp1.x) > 1e3
-        done = jnp.logical_or(jnp.logical_or(state_done, boundary_done), time_done)
+        done = jnp.logical_or(boundary_done, time_done)
 
         return reward, done
 
@@ -181,7 +180,6 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
         return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(self.num_actions,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        # Trajectories fall onto a bounded attractor: adding a ~20% buffer to the standard limits to account for perturbations.
         low = jnp.array([-25.0, -35.0, -10.0], dtype=jnp.float64)
         high = jnp.array([25.0, 35.0, 60.0], dtype=jnp.float64)
 

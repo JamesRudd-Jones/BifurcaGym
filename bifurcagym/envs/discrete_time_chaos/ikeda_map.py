@@ -51,7 +51,7 @@ class IkedaMapCSCA(base_env.BaseEnvironment):
         self.random_start_low: chex.Array = jnp.array([-2.0, -2.0], dtype=jnp.float64)
         self.random_start_high: chex.Array = jnp.array([2.0, 2.0], dtype=jnp.float64)
         self.fixed_point: chex.Array = jnp.array((0.532754622941, 0.246896772711), dtype=jnp.float64)
-        self.reward_ball: float = 1e-3
+        self.reward_scale: float = 1.0  # mean distance of the uncontrolled attractor from the fixed point
 
     @property
     def default_params(self) -> EnvParams:
@@ -108,14 +108,13 @@ class IkedaMapCSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
-        reward = -jnp.linalg.norm(err)  # -jnp.sum(err * err)
+        reward = jnp.exp(-jnp.linalg.norm(err) / self.reward_scale)
 
-        state_done = jnp.linalg.norm(err) < self.reward_ball
         time_done = state_tp1.time >= self.max_steps_in_ep
 
         diverged = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y))) > 1e4
 
-        done = jnp.logical_or(jnp.logical_or(state_done, time_done), diverged)
+        done = jnp.logical_or(time_done, diverged)
 
         return reward, done
 
@@ -180,9 +179,6 @@ class IkedaMapCSCA(base_env.BaseEnvironment):
         return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(1,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        # The theoretical maximum radius of the Ikeda map is bounded by 1 / (1 - u_max).
-        # For u_max = 0.99, the absolute bounds are [-100, 100].
-        # This provides perfect min-max normalisation without clipping valid trajectories.
         bound = 1.0 / (1.0 - params.u_max) + 1.0  # Added a tiny buffer
 
         low = jnp.array([-bound, -bound], dtype=jnp.float64)

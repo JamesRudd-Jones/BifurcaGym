@@ -77,9 +77,11 @@ def test_default_parameters_are_the_canonical_chaotic_values():
     np.testing.assert_allclose((henon_map.EnvParams().init_a, henon_map.EnvParams().init_b), (1.4, 0.3))
     ikeda_params = ikeda_map.EnvParams()
     np.testing.assert_allclose((ikeda_params.u_param, ikeda_params.k, ikeda_params.p), (0.9, 0.4, 6.0))
+    # Tinkerbell deliberately departs from the canonical c = 2.0, which sits on a crisis so controlled orbits escape,
+    # c = 1.8 is still chaotic (checked below)
     tinkerbell_params = tinkerbell_map.EnvParams()
     np.testing.assert_allclose((tinkerbell_params.a, tinkerbell_params.b, tinkerbell_params.c, tinkerbell_params.d),
-                               (0.9, -0.6013, 2.0, 0.5))
+                               (0.9, -0.6013, 1.8, 0.5))
 
 
 @pytest.mark.parametrize("case", make_cases().keys())
@@ -127,6 +129,8 @@ LYAPUNOV_CASES = {
     "IkedaMap": (ikeda_map.IkedaMapCSCA, {}, (0.5076, 2 * np.log(0.9) - 0.5076), 0.01),  # sum is 2 ln u exactly
     "LogisticMap": (lambda: logistic_map.LogisticMapCSCA(init_r=4.0), {}, (np.log(2.0),), 0.01),
     "TentMap": (tent_map.TentMapCSCA, dict(init_mu=1.9), (np.log(1.9),), 0.01),  # |f'| = mu everywhere
+    # No published value at c = 1.8, regression value from this test's own estimator (two resets agree to 0.002)
+    "TinkerbellMap": (tinkerbell_map.TinkerbellMapCSCA, {}, (0.1407, -0.7475), 0.01),
 }
 
 
@@ -167,3 +171,35 @@ def test_uncontrolled_orbits_from_reset_stay_on_the_attractor(case):
 
     assert float(jnp.mean(bounded)) > 0.99, f"{case}: only {float(jnp.mean(bounded)):.0%} of resets stay bounded"
     assert float(jnp.mean(moving)) > 0.99, f"{case}: only {float(jnp.mean(moving)):.0%} of orbits stay chaotic"
+
+
+@pytest.mark.parametrize("case", ["HenonMap", "TinkerbellMap"])
+@pytest.mark.parametrize("bang_bang", [False, True])
+def test_random_control_at_full_range_does_not_escape(case, bang_bang):
+    """
+    Both maps sit near a crisis, so a control range that is too wide lets random exploration push every orbit off the
+    attractor (it did for Henon at +-0.1 on a and b, and for Tinkerbell at the canonical c = 2.0)
+    """
+    env, _, _ = make_cases()[case]
+    params = env.default_params
+    space = env.action_space(params)
+    high = jnp.broadcast_to(jnp.asarray(space.high), space.shape)  # scalar or per action bounds
+
+    def episode(key):
+        reset_key, key = jrandom.split(key)
+        _, state = env.reset(params, reset_key)
+
+        def body(carry, key):
+            state, alive = carry
+            if bang_bang:
+                action = jrandom.choice(key, jnp.array((-1.0, 0.0, 1.0)), high.shape) * high
+            else:
+                action = jrandom.uniform(key, high.shape, minval=-high, maxval=high)
+            _, _, state, _, done, _ = env.step(action, state, params, key)
+            return (state, alive & ~(done & (state.time < env.max_steps_in_ep))), None
+
+        (_, alive), _ = jax.lax.scan(body, (state, jnp.array(True)), jrandom.split(key, env.max_steps_in_ep))
+        return alive
+
+    survived = float(jnp.mean(jax.vmap(episode)(jrandom.split(jrandom.key(4), 512))))
+    assert survived > 0.98, f"{case}: only {survived:.1%} of random control episodes avoid escaping"

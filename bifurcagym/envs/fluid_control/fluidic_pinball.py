@@ -20,8 +20,7 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    values = jnp.array([-1, 0, 1])
-    action_array: chex.Array = struct.field(False, default_factory=lambda: jnp.array(jnp.meshgrid(EnvParams.values, EnvParams.values, EnvParams.values)).T.reshape(-1, 3))
+    values: Tuple[int, ...] = struct.field(False, default=(-1, 0, 1))
     burn_in_steps: int = struct.field(False, default=2000)
     downsample_val: int = struct.field(False, default=20)
     max_steps_in_ep: int = struct.field(False, default=1000)
@@ -31,21 +30,40 @@ class EnvParams:
     ny: int = struct.field(False, default=150)
     reynolds: float = 105.0  # Re < 15: Steady, Re ~ 100: Vortex Shedding, Re > 115: Chaotic
 
-    # D2Q9 constraints
-    w: chex.Array = struct.field(False, default_factory=lambda: jnp.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36]))
-    idxs: chex.Array = struct.field(False, default_factory=lambda: jnp.arange(9))
-    c: chex.Array = struct.field(False, default_factory=lambda: jnp.array([[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1],
-                                                                                        [1, 1], [-1, 1], [-1, -1], [1, -1]]))
+    w_tuple: Tuple[float, ...] = struct.field(False, default=(4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9,
+                                                              1 / 36, 1 / 36, 1 / 36, 1 / 36))
+    c_tuple: Tuple[Tuple[int, int], ...] = struct.field(False, default=((0, 0), (1, 0), (0, 1), (-1, 0), (0, -1),
+                                                                        (1, 1), (-1, 1), (-1, -1), (1, -1)))
     # Inverse directions for bounce-back
-    opp_idxs: chex.Array = struct.field(False, default_factory=lambda: jnp.array([0, 3, 4, 1, 2, 7, 8, 5, 6]))
+    opp_idxs_tuple: Tuple[int, ...] = struct.field(False, default=(0, 3, 4, 1, 2, 7, 8, 5, 6))
 
     radius: int = struct.field(False, default=10)
 
     u_inlet: float = 0.1  # Inlet velocity
     cs2: float = 1 / 3  # Speed of sound squared
 
-    max_control: float = 1.0
-    maximum_max_control: float = struct.field(False, default=1.0)  # maximum to ensure correct scaling
+    # Cylinder angular velocity in lattice units, 0.01 gives a surface speed of radius * 0.01 = u_inlet. At tau ~ 0.57
+    # the LBM is unstable from twice this (surface speed 0.2), random actions there NaN within a few steps
+    max_control: float = 0.01
+    maximum_max_control: float = struct.field(False, default=0.01)  # maximum to ensure correct scaling
+
+    @property
+    def w(self) -> chex.Array:
+        return jnp.array(self.w_tuple)
+
+    @property
+    def c(self) -> chex.Array:
+        return jnp.array(self.c_tuple)
+
+    @property
+    def opp_idxs(self) -> chex.Array:
+        return jnp.array(self.opp_idxs_tuple)
+
+    @property
+    def action_array(self) -> chex.Array:
+        # Every combination of {-1, 0, 1} rotation for the 3 cylinders, (27, 3)
+        values = jnp.array(self.values)
+        return jnp.array(jnp.meshgrid(values, values, values)).T.reshape(-1, 3)
 
     @property
     def centres(self) -> chex.Array:
@@ -92,6 +110,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         self.requires_float64: bool = False
 
+        self.reward_scale: float = 0.3  # mean uncontrolled drag + 0.1 |lift|
+
     @property
     def default_params(self) -> EnvParams:
         return EnvParams()
@@ -106,12 +126,14 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         # f_next = self.LBM_step(state.f, action)
 
-        def sim_steps(runner_state, unused):
-            f, _, _ = runner_state
-            return self.LBM_step(f, action, params), None
+        def sim_steps(f, unused):
+            f_next, drag, lift = self.LBM_step(f, action, params)
+            return f_next, (drag, lift)
 
-        (f_next, drag, lift), _ = jax.lax.scan(sim_steps, (state.f, jnp.zeros(()), jnp.zeros(())), None, params.steps_per_env_step)
-        # TODO run the env for a number of steps for each RL step
+        # Forces are averaged over the LBM steps in each env step, the instantaneous values are noisy
+        f_next, (drags, lifts) = jax.lax.scan(sim_steps, state.f, None, params.steps_per_env_step)
+        drag = jnp.mean(drags)
+        lift = jnp.mean(lifts)
 
         new_state = EnvState(f=f_next, drag=drag, lift=lift, time=state.time + 1)
 
@@ -164,7 +186,7 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         3. Cylinders - Rotating Bounce-Back (The 'Action')
         """
 
-        # Cylinder boune back steps
+        # Cylinder bounce back steps
         # centres: (Ncyl, 2)
         # action:  (Ncyl,)
         cx = params.centres[:, 0][:, None, None]  # (Ncyl, 1, 1)
@@ -191,10 +213,8 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         r2 = (params.X - cx) ** 2 + (params.Y - cy) ** 2
         cyl_mask = r2 <= (10.0 ** 2)  # (Ncyl, ny, nx)
 
-        # Combine cylinders safely (no overwrite ambiguity)
         cyl_mask_any = jnp.any(cyl_mask, axis=0)
 
-        # If overlapping cylinders exist, last one wins (consistent with scan)
         idx = jnp.argmax(cyl_mask, axis=0)
         f_cyl = jnp.take_along_axis(f_rotated, idx[None, ..., None], axis=0)[0]
 
@@ -210,13 +230,13 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
     def _calculate_forces(self, f_pre_collision, f_post_collision, params: EnvParams):
         """
-        Optimized calculation using einsum to avoid intermediate array allocations.
+        Optimised calculation using einsum to avoid intermediate array allocations.
         Calculates Sum(mask * (f_post - f_pre) * c) in a single pass.
         """
-        # 1. Compute the momentum change (XLA will fuse this difference into the einsum kernel)
+        # Compute the momentum change
         delta_f = f_post_collision - f_pre_collision
 
-        # 2. Use einsum to contract dimensions efficiently.
+        # Use einsum to contract dimensions efficiently.
         # String '...,...q,qd->d':
         #   '...' : Matches spatial dimensions (Nx, Ny) of the mask and f
         #   'q'   : Matches the discrete velocity direction (Q)
@@ -228,12 +248,14 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         #   - Sums over all spatial (...) and direction (q) indices
         #   - Returns vector d (fx, fy)
 
-        force = jnp.einsum('...,...q,qd->d',
-                           params.mask_solid.astype(delta_f.dtype), # Ensure mask is float
-                           delta_f,
-                           params.c)
+        momentum_change = jnp.einsum('...,...q,qd->d',
+                                     params.mask_solid.astype(delta_f.dtype),  # Ensure mask is float
+                                     delta_f,
+                                     params.c)
 
-        return force
+        # That is the momentum the fluid gains at the solid nodes, the force on the cylinders is equal and opposite,
+        # so drag (x component) is positive for the inlet flow pushing the cylinders downstream
+        return -momentum_change
 
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         f_init = self._get_equilibrium(jnp.ones((params.ny, params.nx, 1)), jnp.zeros((params.ny, params.nx, 2)), params)
@@ -258,9 +280,10 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         rho = jnp.sum(state_tp1.f, axis=-1, keepdims=True)
         u = jnp.dot(state_tp1.f, params.c) / rho
 
-        reward = -(state_tp1.drag + 0.1 * jnp.abs(state_tp1.lift))
+        cost = state_tp1.drag + 0.1 * jnp.abs(state_tp1.lift)
+        reward = jnp.exp(-jnp.maximum(cost, 0.0) / self.reward_scale)
+        reward = jnp.where(jnp.isnan(reward), 0.0, reward)
 
-        # Check stability
         done = (state_tp1.time >= params.max_steps_in_ep) | jnp.any(jnp.isnan(state_tp1.f)) | (jnp.max(jnp.abs(u)) > 0.5)
 
         return reward, done
@@ -273,7 +296,6 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         rho = jnp.sum(state.f, axis=-1, keepdims=True)
         u = jnp.dot(state.f, params.c) / rho
 
-        # Vorticity calc
         uy, ux = jnp.gradient(u[:, :, 0])
         vy, vx = jnp.gradient(u[:, :, 1])
         vorticity = vx - uy

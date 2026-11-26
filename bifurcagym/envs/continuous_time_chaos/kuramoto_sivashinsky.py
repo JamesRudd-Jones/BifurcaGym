@@ -39,8 +39,6 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         self.requires_float64: bool = True
 
-        self.reward_ball: float = 0.01
-
         here = Path(__file__).resolve().parent
         self.data_dir = here / "ks_files"
 
@@ -136,13 +134,7 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
                                  ) -> Tuple[chex.Array, chex.Array]:
         reward = -jnp.linalg.norm(state_tp1.u - self.U_bf)
 
-        state_done = jax.lax.select(jnp.linalg.norm(state_tp1.u - self.U_bf) < self.reward_ball,
-                                    jnp.array(True),
-                                    jnp.array(False))
-        time_done = jax.lax.select(state_tp1.time >= self.max_steps_in_ep,
-                                   jnp.array(True),
-                                   jnp.array(False))
-        done = jnp.logical_or(state_done, time_done)
+        done = jnp.asarray(state_tp1.time >= self.max_steps_in_ep)
 
         return reward, done
 

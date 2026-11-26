@@ -15,7 +15,7 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
-    init_mu: float = 1.999  # exactly 2 collapses every floating point orbit onto 0 within ~55 steps
+    init_mu: float = 1.999
 
     max_control: float = 0.1
     maximum_max_control: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling
@@ -43,7 +43,6 @@ class TentMapCSCA(base_env.BaseEnvironment):
         self.random_start: bool = True
         self.random_start_range_lower: float = 0.0
         self.random_start_range_upper: float = 1.0
-        self.reward_ball: float = 0.001
 
     @property
     def default_params(self) -> EnvParams:
@@ -57,7 +56,8 @@ class TentMapCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)
 
-        new_x = (action + params.init_mu) * jnp.minimum(state.x, 1 - state.x)
+        mu = jnp.minimum(action + params.init_mu, 2.0)
+        new_x = mu * jnp.minimum(state.x, 1 - state.x)
 
         new_state = EnvState(x=new_x, time=state.time+1)
 
@@ -91,10 +91,8 @@ class TentMapCSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         reward = -jnp.abs(state_tp1.x - params.fixed_point) ** 2
-        # The above can set more specific norm distances
 
-        # TODO state_t or state_tp1
-        done = jnp.logical_or(jnp.abs(state_tp1.x - params.fixed_point) < self.reward_ball, state_tp1.time >= self.max_steps_in_ep)
+        done = state_tp1.time >= self.max_steps_in_ep
 
         return reward, done
 

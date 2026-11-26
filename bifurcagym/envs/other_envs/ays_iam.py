@@ -36,10 +36,18 @@ class EnvParams:
     sigma: float = 4e12
     phi: float = 4.7e10
 
-    # Fixed points for termination conditions
-    green_fp: chex.Array = struct.field(False, default_factory=lambda: jnp.array([0.0, 1.0, 1.0]))
-    black_fp: chex.Array = struct.field(False, default_factory=lambda: jnp.array([0.6, 0.4, 0.0]))
+    # Fixed points for termination conditions, tuples as static fields must be hashable, arrays from the properties below
+    green_fp_tuple: Tuple[float, float, float] = struct.field(False, default=(0.0, 1.0, 1.0))
+    black_fp_tuple: Tuple[float, float, float] = struct.field(False, default=(0.6, 0.4, 0.0))
     final_radius: float = struct.field(False, default=0.05)
+
+    @property
+    def green_fp(self) -> chex.Array:
+        return jnp.array(self.green_fp_tuple)
+
+    @property
+    def black_fp(self) -> chex.Array:
+        return jnp.array(self.black_fp_tuple)
 
     @property
     def theta(self) -> float:

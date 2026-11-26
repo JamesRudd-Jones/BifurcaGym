@@ -74,7 +74,7 @@ class BaseEnvironment(abc.ABC):
         return obs + delta_obs
 
     def step_env(self,
-                 action: chex.Numeric,
+                 input_action: chex.Numeric,
                  state: EnvState,
                  params: EnvParams,
                  key: chex.PRNGKey,

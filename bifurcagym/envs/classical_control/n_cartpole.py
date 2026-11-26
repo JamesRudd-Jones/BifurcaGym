@@ -78,7 +78,6 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         q_dot = jnp.concatenate([jnp.array([state.x_dot]), state.theta_dots])
         x0 = jnp.concatenate([q, q_dot])
 
-        # Integrate forward using precise physics
         xf = utils.integrate_ode(self.dynamics_eom, state.time * self.dt, x0, action, self.dt, self.substeps, params)
 
         n_dof = self.num_poles + 1
@@ -105,10 +104,8 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         thetas = q[1:]
         theta_dots = q_dot[1:]
 
-        # Cart kinetic energy
         K_cart = 0.5 * params.mass_cart * cart_x_dot ** 2
 
-        # Absolute angles and angular velocities
         phi = jnp.cumsum(thetas)
         phi_dot = jnp.cumsum(theta_dots)
 
@@ -137,7 +134,6 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         L = jnp.ones(self.num_poles) * params.lengths
         m = jnp.ones(self.num_poles) * params.mass_poles
 
-        # Joint heights (cart is at y=0, standard setup balances upward +y)
         joint_y = jnp.concatenate([jnp.array([0.0]), jnp.cumsum(L * jnp.cos(phi))[:-1]])
         com_y = joint_y + (L / 2) * jnp.cos(phi)
 
@@ -159,15 +155,12 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         q = x[:n_dof]
         q_dot = x[n_dof:]
 
-        # Apply control force (action) and cart friction (-mu * cart_velocity)
         force = jnp.squeeze(u) - params.mu * q_dot[0]
         tau = jnp.zeros(n_dof).at[0].set(force)
 
-        # Autodiff Mass Matrix and Bias
         M = jax.hessian(self.kinetic_energy, argnums=1)(q, q_dot, params)
         bias = self.compute_bias(q, q_dot, params)
 
-        # Solve M * q_ddot = tau - bias
         q_ddot = jnp.linalg.solve(M, tau - bias)
 
         return jnp.concatenate([q_dot, q_ddot])
@@ -176,10 +169,6 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
     def _angle_normalise(x):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
-    @staticmethod
-    def _get_coords(theta, length):
-        return -length * jnp.sin(theta), length * jnp.cos(theta)
-
     # @partial(jax.jit, static_argnums=(0, 1))
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         loc = jnp.array([0.0, 0.0])
@@ -187,7 +176,9 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         init_state_cart = jrandom.normal(key, shape=(2,)) * scale + loc
 
         key, _key = jrandom.split(key)
-        init_state_thetas = jrandom.normal(_key, shape=(self.num_poles,)) * 0.02 + jnp.pi
+        # Hanging straight down, angles are relative so only the base joint is at pi (pi on every joint folds the poles)
+        hanging = jnp.zeros(self.num_poles).at[0].set(jnp.pi)
+        init_state_thetas = jrandom.normal(_key, shape=(self.num_poles,)) * 0.02 + hanging
 
         key, _key = jrandom.split(key)
         init_state_theta_dots = jrandom.normal(_key, shape=(self.num_poles,)) * 0.02 + 0.0
@@ -213,15 +204,17 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         tip_y = jnp.sum(params.lengths * jnp.cos(abs_angles))
         position = jnp.array([tip_x, tip_y])
 
+        # PILCO's width of 0.25 is for a single 0.6 pole, so it scales with the total length. The reward then depends on
+        # the tip distance as a fraction of the total length, is PILCO's exactly for 1 pole
         squared_distance = jnp.sum((position - goal) ** 2)
-        squared_sigma = 0.25 ** 2
-        costs = 1 - jnp.exp(-0.5 * squared_distance / squared_sigma)
+        squared_sigma = (0.25 * self.length_total(params) / 0.6) ** 2
+        reward = jnp.exp(-0.5 * squared_distance / squared_sigma)
 
         out_of_bounds = jnp.logical_or(state_tp1.x < -params.x_threshold, state_tp1.x > params.x_threshold)
         time_limit = state_tp1.time >= self.max_steps_in_ep
         fin_done = jnp.logical_or(out_of_bounds, time_limit)
 
-        return -costs, fin_done
+        return reward, fin_done
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
         return self.action_array[action.squeeze()] * params.force_mag / 4
@@ -248,17 +241,23 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         import matplotlib.animation as animation
         import numpy as np
 
-        thetas = np.asarray(trajectory_state.thetas)
+        thetas = np.asarray(trajectory_state.thetas)  # (T, num_poles) relative joint angles
         xs = np.asarray(trajectory_state.x)
-        lengths = np.asarray(jax.vmap(self.lengths)(params))
+        lengths = np.asarray(self.lengths(params))
+
+        # Joint positions in the same frame as the dynamics: absolute angle phi = cumsum(thetas), 0 is upright and
+        # each link adds (L sin(phi), L cos(phi))
+        phis = np.cumsum(thetas, axis=-1)
+        base = np.zeros((xs.shape[0], 1))
+        joints_x = xs[:, None] + np.concatenate((base, np.cumsum(lengths * np.sin(phis), axis=-1)), axis=-1)
+        joints_y = np.concatenate((base, np.cumsum(lengths * np.cos(phis), axis=-1)), axis=-1)
 
         fig, ax = plt.subplots(figsize=(5, 5))
         ax.set_title(f"{self.name}-NumPoles={self.num_poles}")
-        screen_lim = float(np.sum(np.max(lengths, axis=0)))  # TODO should maximum over the batch and then sum all length options
-        ax.set_xlim(-screen_lim * 3, screen_lim * 3)
+        screen_lim = float(np.sum(lengths))
+        ax.set_xlim(min(-params.x_threshold, -screen_lim) * 1.2, max(params.x_threshold, screen_lim) * 1.2)
         ax.set_xlabel("X")
-        ax.set_ylim(-screen_lim* 1.2, screen_lim * 1.2)
-        # ax.set_ylabel("Y")
+        ax.set_ylim(-screen_lim * 1.2, screen_lim * 1.2)
         ax.set_aspect('equal')
         ax.grid(True)
 
@@ -273,16 +272,10 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         anchor, = ax.plot([], [], 'ko', markersize=6)  # Anchor point where the pendulum is attached to the cart
 
         def update(frame):
-            pendulum_x, pendulum_y = jax.vmap(self._get_coords)(thetas[frame], lengths[frame])
             cart_center_x = xs[frame]
 
-            # The pendulum's top is attached to the cart
-            cumulative_x = jnp.cumsum(jnp.concatenate((jnp.ones(1,) * cart_center_x, pendulum_x)))
-            cumulative_y = jnp.cumsum(jnp.concatenate((jnp.zeros(1,), pendulum_y)))
-
-            line.set_data(cumulative_x, cumulative_y)
-            dot.set_data(jnp.expand_dims(cumulative_x[-1], axis=0),
-                         jnp.expand_dims(cumulative_y[-1], axis=0))
+            line.set_data(joints_x[frame], joints_y[frame])
+            dot.set_data([joints_x[frame, -1]], [joints_y[frame, -1]])
 
             # Update cart position (x, y) is bottom-left corner for Rectangle
             cart.set_xy((cart_center_x - cart_width / 2, -cart_height / 2))
@@ -290,7 +283,7 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
             # Update anchor point
             anchor.set_data([cart_center_x], [0])
 
-            return line, dot, cart
+            return line, dot, cart, anchor
 
         # Create the animation
         anim = animation.FuncAnimation(fig,
@@ -299,7 +292,7 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
                                        interval=self.dt * 1000,  # Convert dt to milliseconds
                                        blit=True
                                        )
-        anim.save(f"{file_path}_{self.name}-NumPoles={self.num_poles}..gif")
+        anim.save(f"{file_path}_{self.name}-NumPoles={self.num_poles}.gif")
         plt.close()
 
     @property
@@ -310,9 +303,9 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         return spaces.Discrete(len(self.action_array))
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
-        high = jnp.concatenate((jnp.array((10.0, 10.0)),
-                                jnp.tile(jnp.array((3.14159,)), self.num_poles),
-                                jnp.tile(jnp.array((25.0,)), self.num_poles)))
+        high = jnp.concatenate((jnp.array((params.maximum_x_threshold, 15.0)),
+                                jnp.tile(jnp.array((jnp.pi,)), self.num_poles),
+                                jnp.tile(jnp.array((25.0 * (self.num_poles + 1),)), self.num_poles)))
         return spaces.Box(-high, high, (2 + self.num_poles * 2,), dtype=jnp.float32)
 
 

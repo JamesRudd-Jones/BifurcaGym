@@ -18,8 +18,8 @@ class EnvParams:
     init_a: float = 1.4
     init_b: float = 0.3
 
-    max_control: float = 0.1
-    maximum_max_control: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling
+    max_control: chex.Array = struct.field(default_factory=lambda: jnp.array((0.015, 0.002)))
+    maximum_max_control: Tuple[float, float] = struct.field(False, default=(0.015, 0.002))
 
 
 class HenonMapCSCA(base_env.BaseEnvironment):
@@ -40,11 +40,10 @@ class HenonMapCSCA(base_env.BaseEnvironment):
 
         self.start_point: float = 0.0
         self.random_start: bool = True
-        # Box inside the basin of attraction (x in [-1, 1], y in [-0.3, 0.3]), wider boxes diverge to infinity
         self.random_start_range_lower: chex.Array = jnp.array((-1.0, -0.3))
         self.random_start_range_upper: chex.Array = jnp.array((1.0, 0.3))
         self.fixed_point: chex.Array = jnp.array((0.631354477, 0.189406343), dtype=jnp.float64)
-        self.reward_ball: float = 0.001
+        self.reward_scale: float = 0.7  # mean distance of the uncontrolled attractor from the fixed point
 
     @property
     def default_params(self) -> EnvParams:
@@ -94,17 +93,11 @@ class HenonMapCSCA(base_env.BaseEnvironment):
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
         err = jnp.array((state_tp1.x, state_tp1.y)) - self.fixed_point
-        reward = -jnp.linalg.norm(err, 2)
-        # the above can set more specific norm distances
+        reward = jnp.exp(-jnp.linalg.norm(err) / self.reward_scale)
 
-        # TODO state_t or state_tp1
-        # boundary_done_x = jnp.logical_or(state_tp1.x <= -10, state_tp1.x >= 10)
-        # boundary_done_y = jnp.logical_or(state_tp1.y <= -10, state_tp1.y >= 10)
-        # boundary_done = jnp.logical_or(boundary_done_x, boundary_done_y)
         boundary_done = jnp.linalg.norm(jnp.array((state_tp1.x, state_tp1.y))) > 1e3
-        goal_done = jnp.linalg.norm(err) < self.reward_ball
 
-        done = jnp.logical_or(jnp.logical_or(boundary_done, goal_done), state_tp1.time >= self.max_steps_in_ep)
+        done = jnp.logical_or(boundary_done, state_tp1.time >= self.max_steps_in_ep)
 
         return reward, done
 
@@ -166,7 +159,8 @@ class HenonMapCSCA(base_env.BaseEnvironment):
         return "HenonMap-v0"
 
     def action_space(self, params: EnvParams) -> spaces.Box:
-        return spaces.Box(-params.maximum_max_control, params.maximum_max_control, shape=(2,), dtype=jnp.float64)
+        high = jnp.array(params.maximum_max_control, dtype=jnp.float64)
+        return spaces.Box(-high, high, shape=(2,), dtype=jnp.float64)
 
     def observation_space(self, params: EnvParams) -> spaces.Box:
         return spaces.Box(-1.4, 1.4, (2,), dtype=jnp.float64)
