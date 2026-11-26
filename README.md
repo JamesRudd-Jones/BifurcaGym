@@ -105,8 +105,8 @@ available (it is also unavailable for discrete state versions, as observations a
 | 1D Kuramoto–Sivashinsky | `KS-v0` | C (partial) | D/C | 8 | 4 | Y | [Paper](https://royalsocietypublishing.org/doi/10.1098/rspa.2019.0351) |
 | Lorenz63 | `Lorenz63-v0` | C | D/C | 3 | 3 | Y | [Paper](https://npg.copernicus.org/articles/31/319/2024/npg-31-319-2024.pdf); [Info](https://en.wikipedia.org/wiki/Lorenz_system) |
 | Quadruple Gyre Flow | `QuadrupleGyreFlow-v0` | C | D/C | 3 | 2 | Y |  |
-| Rössler | `Rossler-v0` | C | D/C | 3 | 3 | Y | [Info](http://www.scholarpedia.org/article/Rossler_attractor) |
-| Hénon Map | `HenonMap-v0` | D/C | D/C | 2 | 2 | Y | [Info](https://en.wikipedia.org/wiki/H%C3%A9non_map) |
+| R&ouml;ssler | `Rossler-v0` | C | D/C | 3 | 3 | Y | [Info](http://www.scholarpedia.org/article/Rossler_attractor) |
+| H&eacute;non Map | `HenonMap-v0` | D/C | D/C | 2 | 2 | Y | [Info](https://en.wikipedia.org/wiki/H%C3%A9non_map) |
 | Ikeda Map | `IkedaMap-v0` | C | D/C | 2 | 1 | Y | [Info](https://en.wikipedia.org/wiki/Ikeda_map) |
 | Logistic Map | `LogisticMap-v0` | D/C | D/C | 1 | 1 | Y | [Paper](https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement); [Info](https://blbadger.github.io/logistic-map.html#mjx-eqn-eq1) |
 | Tent Map | `TentMap-v0` | D/C | D/C | 1 | 1 | Y | [Info](https://en.wikipedia.org/wiki/Tent_map) |
@@ -155,7 +155,7 @@ If you use BifurcaGym in your work, please cite:
 ```bibtex
 @misc{bifurcagym,
   title  = {BifurcaGym: A Benchmark of Reinforcement Learning and Control Environments with Chaotic Dynamics},
-  author = {James Rudd-Jones and Mirco Musolesi and Maria Perez-Ortiz },
+  author = {James Rudd-Jones and Mirco Musolesi and Mar{\'\i}a P{\'e}rez-Ortiz},
   year   = {2026},
 }
 ```
