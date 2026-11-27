@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 
 
@@ -113,6 +114,31 @@ ENV_METADATA = {
                              "settles when uncontrolled, chaotic under periodic forcing"),
     "Walker2d-v0": EnvMetadata("control-induced", "ODE", "dissipative", "autonomous", "n/a", False,
                                "settles when uncontrolled, chaotic under periodic forcing"),
+}
+
+
+@dataclass(frozen=True)
+class BifurcationDefault:
+    param: str  # params field to sweep
+    low: float
+    high: float
+    observable: Callable  # state -> scalar
+    observable_name: str
+    record: str  # "samples" for maps, "peaks" (successive maxima) for flows
+    n_transient: int
+    n_samples: int
+    n_lyapunov_steps: int  # flows need many steps, 5,000 at dt ~0.01 is only 50 time units
+
+
+BIFURCATION_DEFAULTS = {
+    "LogisticMap-v0": BifurcationDefault("init_r", 2.8, 4.0, lambda s: s.x, "x", "samples", 1_000, 200, 5_000),
+    "TentMap-v0": BifurcationDefault("init_mu", 1.0, 2.0, lambda s: s.x, "x", "samples", 1_000, 200, 5_000),
+    "HenonMap-v0": BifurcationDefault("init_a", 1.0, 1.42, lambda s: s.x, "x", "samples", 1_000, 200, 5_000),
+    "IkedaMap-v0": BifurcationDefault("u_param", 0.3, 0.9, lambda s: s.x, "x", "samples", 1_000, 200, 5_000),
+    "Rossler-v0": BifurcationDefault("c", 2.0, 6.5, lambda s: s.x[0], "maxima of x", "peaks", 5_000, 6_000, 50_000),
+    "Lorenz63-v0": BifurcationDefault("rho", 20.0, 220.0, lambda s: s.x[2], "maxima of z", "peaks", 5_000, 4_000,
+                                      20_000),
+    "Chua-v0": BifurcationDefault("alpha", 8.0, 16.0, lambda s: s.x[0], "maxima of x", "peaks", 5_000, 6_000, 50_000),
 }
 
 
