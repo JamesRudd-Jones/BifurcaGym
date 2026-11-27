@@ -3,11 +3,14 @@ name = "bifurcagym"
 version = "0.1.0"
 description = "A JAX benchmark of reinforcement learning and control environments with chaotic dynamics"
 authors = [
-    {name = "james_dell", email = "james.rudd.jones@gmail.com"},
+    {name = "James Rudd-Jones", email = "james.rudd.jones@gmail.com"},
+    {name = "Mirco Musolesi"},
+    {name = "María Pérez-Ortiz"},
 ]
 dependencies = [
     "matplotlib>=3.10.3",
     "cmocean>=4.0.3",
+    # HydroGym wrapper relies on internals of the matching JAX and the cuda extra below must pin the same version
     "jax==0.6.0",
     "flax>=0.10.6",
     "chex>=0.1.90",
@@ -22,6 +25,7 @@ baselines = [
     "distrax>=0.1.5",
     "wandb>=0.21.0",
 ]
+# Only used by the unregistered envs in experimental/
 experimental = [
     "phiflow>=3.4.0",
     "jax-cfd>=0.2.1",
@@ -42,31 +46,19 @@ mujoco = [
 
 [dependency-groups]
 dev = [
-    "lxm3>=0.4.0",
     "ruff>=0.1.11",
-    "black>=23.12.1",
     "pytest>=7.4.4",
     "pytest-xdist>=3.5.0",
-    "pre-commit>=3.6.0",
 ]
 
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
-[[tool.pdm.source]]
-name = "jax_cuda"
-url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
-verify_ssl = true
-type = "find_links"
-
 [tool.pdm.scripts]
 test.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load"
 test-all.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load -m ''"
 test-physics.cmd = "systemd-run --user --scope --quiet -p MemoryMax=16G -p MemorySwapMax=0 nice -n 10 pytest -n 4 --dist load -m physics tests/physics"
-lint.shell = "ruff check ."
-fmt.shell = "ruff check --fix ."
-# test.env = { JAX_PLATFORM_NAME = "cpu", JAX_DISABLE_MOST_OPTIMIZATIONS = "1" }
 # ruff lints and sorts imports only, no auto-formatter so hand-aligned layout is left alone
 lint.cmd = "ruff check ."
 fmt.cmd = "ruff check --fix ."
@@ -82,7 +74,7 @@ markers = [
 
 [tool.ruff]
 line-length = 120
-extend-exclude = ["scratch", "third_party", "docs"]
+extend-exclude = ["experimental"]  # unregistered work in progress envs and scratch scripts
 
 [tool.ruff.lint]
 select = ["E",
