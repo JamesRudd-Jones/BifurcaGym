@@ -2,7 +2,6 @@
 Based off: https://github.com/fusion-ml/trajectory-information-rl/blob/main/barl/envs/pilco_cartpole.py
 """
 
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from typing import Any, Dict, Tuple
@@ -44,8 +43,9 @@ class EnvParams:
 
 
 class CartPoleCSDA(base_env.BaseEnvironment):
-    def __init__(self, **env_kwargs):
+    def __init__(self, solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
 
         self.dt: float = 0.1
         self.horizon: int = 25
@@ -71,7 +71,8 @@ class CartPoleCSDA(base_env.BaseEnvironment):
         action = self.action_convert(input_action, params)
 
         s = jnp.array((state.x, state.theta, state.x_dot, state.theta_dot))
-        ns = utils.integrate_ode(self._dsdt, state.time * self.dt, s, action, self.dt, self.substeps, params)
+        ns = utils.integrate_explicit(self._dsdt, state.time * self.dt, s, action, self.dt, self.substeps, params,
+                                      solver=self.solver)
 
         x = ns[0]
         theta = self._angle_normalise(ns[1])

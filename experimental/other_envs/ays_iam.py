@@ -55,8 +55,9 @@ class EnvParams:
 
 
 class AYSIAMCSDA(base_env.BaseEnvironment):
-    def __init__(self, **env_kwargs):
+    def __init__(self, solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver  # an explicit solver from bifurcagym.envs.utils
 
         self.dt: float = 1
         self.horizon: int = 25
@@ -89,7 +90,8 @@ class AYSIAMCSDA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)
 
-        new_ays = utils.integrate_ode(self._ays_rhs, state.time * self.dt, state.ays, action, self.dt, self.substeps, params)
+        new_ays = utils.integrate_explicit(self._ays_rhs, state.time * self.dt, state.ays, action, self.dt,
+                                           self.substeps, params, solver=self.solver)
 
         new_state = EnvState(ays=new_ays,
                              time=state.time + 1)

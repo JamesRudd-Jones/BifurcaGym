@@ -36,8 +36,9 @@ class NPendulumCSDA(base_env.BaseEnvironment):
     autodiff, see kinetic_energy and potential_energy
     """
 
-    def __init__(self, n_links: int=2, **env_kwargs):
+    def __init__(self, n_links: int=2, solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
 
         self.dt: float = 0.05
         self.horizon: int = 200
@@ -66,7 +67,8 @@ class NPendulumCSDA(base_env.BaseEnvironment):
 
         x0 = jnp.concatenate([state.theta, state.theta_dot])
 
-        xf = utils.integrate_ode(self.dynamics_eom, state.time * self.dt, x0, action, self.dt, self.substeps, params)
+        xf = utils.integrate_explicit(self.dynamics_eom, state.time * self.dt, x0, action, self.dt, self.substeps,
+                                      params, solver=self.solver)
 
         new_theta = xf[:self.n_links]
         new_theta_dot = xf[self.n_links:]
@@ -230,7 +232,6 @@ class NPendulumCSDA(base_env.BaseEnvironment):
         ax.set_aspect('equal')
         ax.grid(True)
 
-        # initial coordinates
         xs0, ys0 = endpoints_for_frame(theta_traj[0], length)
         line, = ax.plot([0.0] + xs0.tolist(), [0.0] + ys0.tolist(), lw=3, c='k', marker='o')
         circle_patches = []

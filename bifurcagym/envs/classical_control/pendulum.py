@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from bifurcagym.envs import base_env
@@ -142,11 +141,10 @@ class PendulumCSDA(base_env.BaseEnvironment):
             circle.set_center((x, y))
             return line, circle
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=thetas.shape[0],
-                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")

@@ -33,8 +33,9 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
     Control u perturbs rho: rho_eff = rho + u (clipped).
     """
 
-    def __init__(self, random_start: bool = False, **env_kwargs):
+    def __init__(self, random_start: bool = False, solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
 
         self.dt: float = 0.01
         self.horizon: int = 200
@@ -65,7 +66,8 @@ class Lorenz63CSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         u = self.action_convert(input_action, params)
 
-        new_x = utils.integrate_ode(self._f, state.time * self.dt, state.x, u, self.dt, self.substeps, params)
+        new_x = utils.integrate_explicit(self._f, state.time * self.dt, state.x, u, self.dt, self.substeps, params,
+                                         solver=self.solver)
         new_state = EnvState(x=new_x, time=state.time + 1)
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)

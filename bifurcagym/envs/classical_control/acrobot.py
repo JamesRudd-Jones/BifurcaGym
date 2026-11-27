@@ -5,7 +5,6 @@ https://github.com/RobertTLange/gymnax/blob/main/gymnax/environments/classic_con
 """
 
 
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from bifurcagym.envs import base_env, utils
@@ -44,8 +43,9 @@ class EnvParams:
 
 class AcrobotCSDA(base_env.BaseEnvironment):
 
-    def __init__(self, **env_kwargs):
+    def __init__(self, solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
 
         self.dt: float = 0.2
         self.max_steps_in_ep: int = int(400 // self.dt)
@@ -74,7 +74,8 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
         s = jnp.array([state.joint_angle_1, state.joint_angle_2, state.vel_1, state.vel_2])
 
-        ns = utils.rk4_step(self._dsdt, state.time * self.dt, s, torque, self.dt, params)
+        ns = utils.integrate_explicit(self._dsdt, state.time * self.dt, s, torque, self.dt, 1, params,
+                                      solver=self.solver)
 
         joint_angle_1 = self._wrap(ns[0], -jnp.pi, jnp.pi)
         joint_angle_2 = self._wrap(ns[1], -jnp.pi, jnp.pi)
@@ -213,11 +214,10 @@ class AcrobotCSDA(base_env.BaseEnvironment):
 
             return line, dot
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=angles_1.shape[0],
-                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")

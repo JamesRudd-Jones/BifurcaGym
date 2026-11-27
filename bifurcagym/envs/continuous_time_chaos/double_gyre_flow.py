@@ -35,8 +35,9 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
     """
 
     def __init__(self, n_gyre_rows: int = 1, lipschitz_reward: bool = False, random_start: bool = False,
-                 **env_kwargs):
+                 solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
         if not isinstance(n_gyre_rows, int) or n_gyre_rows < 1:
             raise ValueError(f"n_gyre_rows must be a positive integer, got {n_gyre_rows!r}")
 
@@ -82,7 +83,8 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
             u_flow, v_flow = self._get_flow_velocity(x_arr[0], x_arr[1], t_curr, p)
             return jnp.array((u_flow + u_arr[0], v_flow + u_arr[1]))
 
-        new_state_arr = utils.rk4_step(dynamics, state.time * self.dt, state_arr, action, self.dt, params)
+        new_state_arr = utils.integrate_explicit(dynamics, state.time * self.dt, state_arr, action, self.dt, 1, params,
+                                                 solver=self.solver)
 
         new_x = new_state_arr[0]
         new_y = new_state_arr[1]
@@ -200,7 +202,6 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
         initial_U_fine, initial_V_fine = self._get_flow_velocity(X_fine, Y_fine, times[0] * self.dt, get_curr_param(params, 0))
         speed0 = np.sqrt(initial_U_fine ** 2 + initial_V_fine ** 2)
 
-        # Setup animation elements
         line, = ax.plot([], [], 'r-', lw=2, label='Agent Trail', zorder=3)
         dot, = ax.plot([], [], color="magenta", marker="o", markersize=10, label='Current State', zorder=5)
         pcm = ax.pcolormesh(X_fine, Y_fine, speed0, cmap=cmap_val, shading='auto', vmin=0,
@@ -233,7 +234,6 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
 
             return line, dot, pcm, arrow
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=len(times),

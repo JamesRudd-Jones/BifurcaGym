@@ -27,8 +27,10 @@ class EnvParams:
 
 class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
-    def __init__(self, num_actions: int = 4, **env_kwargs):
+    def __init__(self, num_actions: int = 4, solver=utils.imex_rk3_step, substeps: int = 1, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
+        self.substeps: int = substeps
 
         self.dt: float = 0.05
         self.horizon: int = 25
@@ -84,24 +86,21 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
         dum_SA = self.B_SA * action.T  # TODO check this transpose
         f0_S = jnp.sum(dum_SA, axis=-1)
 
-        # semi-implicit third-order runge kutta update.
-        # ref: http://journals.ametsoc.org/doi/pdf/10.1175/MWR3214.1
+        # u_t = (k^2 - k^4) u - u u_x + f in Fourier space, a semilinear system whose stiff linear part is diagonal,
+        # so utils.integrate_semilinear handles it, the forcing is held constant over the step
         u_K = jnp.fft.rfft(state.u, axis=-1)
         f_K = jnp.fft.rfft(f0_S, axis=-1)
-        u_save_K = u_K.copy()
-
-        def _runge_kutta_update(runner, unused):
-            u_K, ind = runner
-            dt = self.dt / (3 - ind)
-            u_K = u_save_K + dt * self.nlterm(u_K, f_K)
-            u_K = (u_K + 0.5 * self.lin_K * dt * u_save_K) / (1. - 0.5 * self.lin_K * dt)
-
-            ind += 1
-
-            return (u_K, ind), None
-
-        final_runner_state = jax.lax.scan(_runge_kutta_update, (u_K, 0), None, 3)
-        u_S = jnp.fft.irfft(final_runner_state[0][0], axis=-1)
+        new_u_K = utils.integrate_semilinear(self.lin_K,
+                                             lambda t, x_K, forcing_K, p: self.nlterm(x_K, forcing_K),
+                                             state.time * self.dt,
+                                             u_K,
+                                             f_K,
+                                             self.dt,
+                                             self.substeps,
+                                             params,
+                                             solver=self.solver,
+                                             )
+        u_S = jnp.fft.irfft(new_u_K, n=self.N, axis=-1)
 
         new_state = EnvState(u=u_S, time=state.time+1)
 

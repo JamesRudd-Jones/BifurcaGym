@@ -33,8 +33,9 @@ class EnvParams:
 
 class BickleyJetFlowCSCA(base_env.BaseEnvironment):
 
-    def __init__(self, **env_kwargs):
+    def __init__(self, solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
 
         self.dt: float = 0.1
         self.horizon: int = 25
@@ -75,7 +76,8 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
             u_flow, v_flow = self._get_flow_velocity(x_arr[0], x_arr[1], t_curr, p)
             return jnp.array((u_flow + u_arr[0], v_flow + u_arr[1]))
 
-        new_state_arr = utils.rk4_step(dynamics, state.time * self.dt, state_arr, action, self.dt, params)
+        new_state_arr = utils.integrate_explicit(dynamics, state.time * self.dt, state_arr, action, self.dt, 1, params,
+                                                 solver=self.solver)
 
         new_x = new_state_arr[0]
         new_y = new_state_arr[1]
@@ -247,7 +249,6 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
 
             return line, dot, pcm, arrow
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=len(times),

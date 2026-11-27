@@ -34,8 +34,9 @@ class EnvParams:
 
 
 class NCartPoleCSDA(base_env.BaseEnvironment):
-    def __init__(self, num_poles: int = 2, **env_kwargs):
+    def __init__(self, num_poles: int = 2, solver=utils.rk4_step, **env_kwargs):
         super().__init__(**env_kwargs)
+        self.solver = solver
 
         self.dt: float = 0.1
         self.horizon: int = 25
@@ -78,7 +79,8 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
         q_dot = jnp.concatenate([jnp.array([state.x_dot]), state.theta_dots])
         x0 = jnp.concatenate([q, q_dot])
 
-        xf = utils.integrate_ode(self.dynamics_eom, state.time * self.dt, x0, action, self.dt, self.substeps, params)
+        xf = utils.integrate_explicit(self.dynamics_eom, state.time * self.dt, x0, action, self.dt, self.substeps,
+                                      params, solver=self.solver)
 
         n_dof = self.num_poles + 1
         new_q = xf[:n_dof]
@@ -276,19 +278,16 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
             line.set_data(joints_x[frame], joints_y[frame])
             dot.set_data([joints_x[frame, -1]], [joints_y[frame, -1]])
 
-            # Update cart position (x, y) is bottom-left corner for Rectangle
             cart.set_xy((cart_center_x - cart_width / 2, -cart_height / 2))
 
-            # Update anchor point
             anchor.set_data([cart_center_x], [0])
 
             return line, dot, cart, anchor
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=thetas.shape[0],
-                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}-NumPoles={self.num_poles}.gif")
