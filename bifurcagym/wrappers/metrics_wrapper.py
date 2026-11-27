@@ -23,37 +23,31 @@ _AUGMENTED_STATE_CACHE = {}
 
 
 def create_augmented_state_class(base_state_instance):
-    """
-    Dynamically creates a flat Flax dataclass containing all fields from the
-    original sub-environment state plus the metrics fields.
-    """
     base_cls = type(base_state_instance)
+
     if base_cls in _AUGMENTED_STATE_CACHE:
         return _AUGMENTED_STATE_CACHE[base_cls]
 
-    # Extract all existing fields from the specific sub-environment state
     base_fields = dataclasses.fields(base_cls)
 
-    # Define our extra metrics fields with default values
-    metrics_fields = [
-        ("episode_lengths", int, dataclasses.field(default=0)),
-        ("episode_returns", float, dataclasses.field(default=0.0)),
-        ("returned_episode_lengths", int, dataclasses.field(default=0)),
-        ("returned_episode_returns", float, dataclasses.field(default=0.0)),
-        ("timestep", int, dataclasses.field(default=0)),
-    ]
+    metrics_fields = [("episode_lengths", int, dataclasses.field(default=0)),
+                      ("episode_returns", float, dataclasses.field(default=0.0)),
+                      ("returned_episode_lengths", int, dataclasses.field(default=0)),
+                      ("returned_episode_returns", float, dataclasses.field(default=0.0)),
+                      ("timestep", int, dataclasses.field(default=0)),
+                      ]
 
-    # Combine them into a plain annotated class that struct.dataclass then turns into a frozen PyTree dataclass
-    # Note: Fields with defaults must come after fields without defaults.
     annotations = {}
     namespace = {}
     for f in base_fields:
         annotations[f.name] = f.type
-        # If the base field doesn't have a default, we must preserve that, otherwise copy the field with its metadata
+
         if f.default is not dataclasses.MISSING:
             namespace[f.name] = dataclasses.field(default=f.default, metadata=f.metadata)
+
         elif f.default_factory is not dataclasses.MISSING:
             namespace[f.name] = dataclasses.field(default_factory=f.default_factory, metadata=f.metadata)
+
         elif f.metadata:
             namespace[f.name] = dataclasses.field(metadata=f.metadata)
 
@@ -63,10 +57,10 @@ def create_augmented_state_class(base_state_instance):
 
     namespace["__annotations__"] = annotations
 
-    # Create the class dynamically and register it with Flax struct so JAX can trace it as a PyTree
     DynamicState = struct.dataclass(type(f"Augmented_{base_cls.__name__}", (), namespace))
 
     _AUGMENTED_STATE_CACHE[base_cls] = DynamicState
+
     return DynamicState
 
 
@@ -79,12 +73,11 @@ class MetricsWrapper(object):
     def __init__(self, wrapped_metrics_env):
         self._wrapped_metrics_env = wrapped_metrics_env
 
-        # Probe the environment to see what specific state it uses
         _, sample_env_state = self._wrapped_metrics_env.reset(self._wrapped_metrics_env.default_params, jrandom.key(0))
         self._base_env_cls = type(sample_env_state)
         self._base_fields = {f.name for f in dataclasses.fields(self._base_env_cls)}
 
-        # Create our flat, augmented state class specific to this sub-env
+        # Create flat augmented state class specific to this sub-env
         self.StateCls = create_augmented_state_class(sample_env_state)
 
     @property
@@ -92,7 +85,6 @@ class MetricsWrapper(object):
         return self._wrapped_metrics_env
 
     def _to_base_env_state(self, augmented_state) -> Any:
-        """Strips the metrics fields and returns the original sub-env state class."""
         base_kwargs = {name: getattr(augmented_state, name) for name in self._base_fields}
         return self._base_env_cls(**base_kwargs)
 
@@ -103,20 +95,19 @@ class MetricsWrapper(object):
              params: EnvParams,
              key: chex.PRNGKey,
              ) -> Tuple[chex.Array, chex.Array, MetricsEnvState, chex.Array, chex.Array, Dict[Any, Any]]:
-        # 1. Strip metrics before passing to the underlying env step
         base_env_state = self._to_base_env_state(state)
 
-        obs, delta_obs, nenv_state, reward, done, info = self._wrapped_metrics_env.step(
-            action, base_env_state, params, key
-        )
+        obs, delta_obs, nenv_state, reward, done, info = self._wrapped_metrics_env.step(action,
+                                                                                        base_env_state,
+                                                                                        params,
+                                                                                        key
+                                                                                        )
 
         new_episode_return = state.episode_returns + reward
         new_episode_length = state.episode_lengths + 1
 
-        # 2. Re-flatten the new environment state fields
         new_base_kwargs = {name: getattr(nenv_state, name) for name in self._base_fields}
 
-        # 3. Pack everything back into our flat state
         new_state = self.StateCls(
             **new_base_kwargs,
             episode_lengths=new_episode_length * (1 - done),
@@ -141,7 +132,6 @@ class MetricsWrapper(object):
 
         base_kwargs = {name: getattr(base_env_state, name) for name in self._base_fields}
 
-        # Build the flat state with base fields + default metric values (0 / 0.0)
         state = self.StateCls(**base_kwargs)
 
         return obs, state
