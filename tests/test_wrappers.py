@@ -70,6 +70,10 @@ class TestWrapper:
                 key, _key = jrandom.split(key)
                 action = env.action_space(env_params).sample(_key)
                 w_action = wrapped_env.action_space(w_env_params).sample(_key)
+                if normalised and cont_action:
+                    # Exactly the action the wrapper passes on, sampling each space separately only agrees to the last
+                    # bit and chaotic envs (e.g. Lozi, lambda_1 = 0.47 per step) amplify that past the tolerance
+                    action = wrapped_env.unnormalise_action(w_action, w_env_params)
                 key, _key = jrandom.split(key)
                 nobs, delta_obs, nenv_state, rew, done, info = env.step(action, env_state, env_params, _key)
                 w_nobs, w_delta_obs, w_nenv_state, w_rew, w_done, w_info = wrapped_env.step(w_action,

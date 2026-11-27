@@ -55,8 +55,6 @@ ENV_METADATA = {
     "NPendulum-v0": EnvMetadata("swing-up", "ODE", "conservative", "autonomous", "non-hyperbolic", True,
                                 "frictionless, mixed phase space, some reset states (angles up to pi/2) are already "
                                 "chaotic"),
-    "Pendubot-v0": EnvMetadata("swing-up", "ODE", "conservative", "autonomous", "non-hyperbolic", False,
-                               "as Acrobot with the base joint actuated"),
     "Pendulum-v0": EnvMetadata("reference", "ODE", "conservative", "autonomous", "n/a", False,
                                "single pendulum, integrable, the non-chaotic counterpart of NPendulum"),
     "WetChicken-v0": EnvMetadata("reference", "map", "stochastic", "autonomous", "n/a", False,
@@ -90,10 +88,17 @@ ENV_METADATA = {
     "IkedaMap-v0": EnvMetadata("suppress", "map", "dissipative", "autonomous", "non-hyperbolic", True),
     "LogisticMap-v0": EnvMetadata("suppress", "map", "non-invertible", "autonomous", "non-hyperbolic", True,
                                   "critical point at x = 1/2, period doubling route to chaos in r"),
+    "LoziMap-v0": EnvMetadata("suppress", "map", "dissipative", "autonomous", "hyperbolic", True,
+                              "piecewise linear Hénon, hyperbolic strange attractor (Misiurewicz 1980)"),
     "TentMap-v0": EnvMetadata("suppress", "map", "non-invertible", "autonomous", "hyperbolic", True,
                               "uniformly expanding, |f'| = mu everywhere"),
-    "TinkerbellMap-v0": EnvMetadata("suppress", "map", "dissipative", "autonomous", "non-hyperbolic", True,
-                                    "c = 1.8, moved off the canonical crisis"),
+    "CatMap-v0": EnvMetadata("suppress", "map", "conservative", "autonomous", "hyperbolic", True,
+                             "Arnold's cat map, uniformly hyperbolic and area preserving"),
+    "StandardMap-v0": EnvMetadata("suppress", "map", "conservative", "autonomous", "non-hyperbolic", True,
+                                  "Chirikov's kicked rotor, mixed phase space with KAM islands in a chaotic sea"),
+    "SkewProduct-v0": EnvMetadata("navigate", "map", "non-invertible", "forced", "hyperbolic", True,
+                                  "contracting x driven by a chaotic tent map it cannot change, driver observed or "
+                                  "hidden"),
 
 
 

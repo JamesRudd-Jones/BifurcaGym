@@ -197,7 +197,6 @@ CASES = {"NPendulum-1": lambda: n_pendulum_case(1),
          "NCartPole-1": lambda: n_cartpole_case(1),
          "NCartPole-2": lambda: n_cartpole_case(2),
          "Acrobot": lambda: double_link_case(acrobot.AcrobotCSCA, actuated_joint=1),
-         "Pendubot": lambda: double_link_case(acrobot.PendubotCSCA, actuated_joint=0),
          "CartPole": cartpole_case,
          "Pendulum": pendulum_case,
          }
@@ -255,9 +254,6 @@ ENERGY_CASES = {
     "Acrobot": (lambda env: acrobot.EnvState(joint_angle_1=jnp.array(0.5), joint_angle_2=jnp.array(-0.3),
                                              vel_1=jnp.array(0.2), vel_2=jnp.array(0.1), time=0),
                 lambda s: (jnp.array((s.joint_angle_1, s.joint_angle_2)), jnp.array((s.vel_1, s.vel_2))), {}, 5e-2),
-    "Pendubot": (lambda env: acrobot.EnvState(joint_angle_1=jnp.array(0.5), joint_angle_2=jnp.array(-0.3),
-                                              vel_1=jnp.array(0.2), vel_2=jnp.array(0.1), time=0),
-                 lambda s: (jnp.array((s.joint_angle_1, s.joint_angle_2)), jnp.array((s.vel_1, s.vel_2))), {}, 5e-2),
 }
 
 
@@ -267,7 +263,6 @@ ENERGY_MODELS = {"NPendulum-2": lambda params: n_pendulum_model(2, params),
                  "NCartPole-2": lambda params: n_cartpole_model(2, params),
                  "CartPole": lambda params: cartpole_model(params),
                  "Acrobot": lambda params: double_link_model(params, 1),
-                 "Pendubot": lambda params: double_link_model(params, 0),
                  }
 
 

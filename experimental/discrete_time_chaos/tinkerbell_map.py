@@ -1,3 +1,12 @@
+"""
+The Tinkerbell map, at c = 1.8 rather than the canonical 2.0, which sits on a crisis so controlled orbits escape.
+
+EXPERIMENTAL - moved out of bifurcagym on 27 November 2026, not registered in bifurcagym.make and not covered by the
+test suite. It was a third dissipative, non-hyperbolic 2D map alongside Hénon and Ikeda (same role on both axes, and
+the same tangencies in the hyperbolicity check), and no longer the textbook parameters. Its tests are in
+test_tinkerbell_map.py beside it.
+"""
+
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom

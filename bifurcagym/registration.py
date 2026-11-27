@@ -16,11 +16,14 @@ from bifurcagym.envs.continuous_time_chaos import (arnold_beltrami_childress_flo
                                                    rossler,
                                                    )
 
-from bifurcagym.envs.discrete_time_chaos import (henon_map,
+from bifurcagym.envs.discrete_time_chaos import (cat_map,
+                                                 henon_map,
                                                  ikeda_map,
                                                  logistic_map,
+                                                 lozi_map,
+                                                 skew_product,
+                                                 standard_map,
                                                  tent_map,
-                                                 tinkerbell_map,
                                                  )
 from bifurcagym.envs.fluid_control import (fluidic_pinball,
                                            hydrogym_env,
@@ -89,14 +92,6 @@ def make(env_id: str,
             env = n_pendulum.NPendulumCSCA(**env_kwargs)
         elif cont_state and not cont_action:
             env = n_pendulum.NPendulumCSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State version.")
-
-    elif env_id == "Pendubot-v0":
-        if cont_state and cont_action:
-            env = acrobot.PendubotCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = acrobot.PendubotCSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State version.")
 
@@ -210,6 +205,38 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State Continuous Action version.")
 
+    elif env_id == "LoziMap-v0":
+        if cont_state and cont_action:
+            env = lozi_map.LoziMapCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = lozi_map.LoziMapCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
+    elif env_id == "CatMap-v0":
+        if cont_state and cont_action:
+            env = cat_map.CatMapCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = cat_map.CatMapCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
+    elif env_id == "StandardMap-v0":
+        if cont_state and cont_action:
+            env = standard_map.StandardMapCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = standard_map.StandardMapCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
+    elif env_id == "SkewProduct-v0":
+        if cont_state and cont_action:
+            env = skew_product.SkewProductCSCA(**env_kwargs)
+        elif cont_state and not cont_action:
+            env = skew_product.SkewProductCSDA(**env_kwargs)
+        else:
+            raise ValueError("No Discrete State version.")
+
     elif env_id == "TentMap-v0":
         if cont_state and cont_action:
             env = tent_map.TentMapCSCA(**env_kwargs)
@@ -219,14 +246,6 @@ def make(env_id: str,
             env = tent_map.TentMapDSDA(**env_kwargs)
         else:
             raise ValueError("No Discrete State Continuous Action version.")
-
-    elif env_id == "TinkerbellMap-v0":
-        if cont_state and cont_action:
-            env = tinkerbell_map.TinkerbellMapCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = tinkerbell_map.TinkerbellMapCSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State version.")
 
 
 
@@ -333,7 +352,6 @@ registered_envs = ["Acrobot-v0",
                    "CartPole-v0",
                    "NCartPole-v0",
                    "NPendulum-v0",
-                   "Pendubot-v0",
                    "Pendulum-v0",
                    "WetChicken-v0",
                    "ABCFlow-v0",
@@ -346,8 +364,11 @@ registered_envs = ["Acrobot-v0",
                    "HenonMap-v0",
                    "IkedaMap-v0",
                    "LogisticMap-v0",
+                   "LoziMap-v0",
                    "TentMap-v0",
-                   "TinkerbellMap-v0",
+                   "CatMap-v0",
+                   "StandardMap-v0",
+                   "SkewProduct-v0",
                    "FluidicPinball-v0",
                    "HydroGym-Kolmogorov-v0",
                    "HydroGym-Channel-v0",
