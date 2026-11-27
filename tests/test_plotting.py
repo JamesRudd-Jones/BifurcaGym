@@ -35,8 +35,6 @@ def test_peaks_need_a_scalar_observable():
 
     with pytest.raises(ValueError, match="scalar observable"):
         analysis.bifurcation_sweep(env, params, state, "rho", jnp.array((28.0,)), record="peaks", n_lyapunov_steps=0)
-    with pytest.raises(ValueError, match="record"):
-        analysis.bifurcation_sweep(env, params, state, "rho", jnp.array((28.0,)), record="minima")
 
 
 def test_lorenz_map_is_single_humped():

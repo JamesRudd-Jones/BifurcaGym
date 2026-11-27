@@ -5,6 +5,7 @@ Tests for bifurcagym.analysis against published Lyapunov exponents and exact ide
 import dataclasses
 import json
 
+from flax import struct
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
@@ -12,6 +13,8 @@ import pytest
 
 import bifurcagym
 from bifurcagym import analysis
+from bifurcagym import spaces
+from bifurcagym.envs import base_env
 
 
 def spectrum_for(env_id, n_steps, params_changes=None, make_kwargs=None, **kwargs):
@@ -336,3 +339,88 @@ def test_env_spec_does_not_assess_noise_driven_envs():
 
     assert spec.verdict == "stochastic (not assessed)" and spec.lambda1_per_step is None
     assert spec.agrees_with_label is None and spec.exponents_per_step == []
+
+
+# # # Hyperbolicity
+########################################################################################################################
+@struct.dataclass
+class PlanarState(base_env.EnvState):
+    x: jnp.ndarray
+    y: jnp.ndarray
+
+
+class PlanarMap(base_env.BaseEnvironment):
+    """A bare uncontrolled 2D map, for textbook hyperbolic maps that are not registered envs"""
+
+    def __init__(self, f):
+        super().__init__()
+        self.f = f
+
+    def step_env(self, action, state, params, key):
+        x, y = self.f(state.x, state.y)
+        return jnp.zeros(2), jnp.zeros(2), PlanarState(x=x, y=y, time=state.time + 1), 0.0, False, {}
+
+    def action_space(self, params):
+        return spaces.Box(-1.0, 1.0, (2,))
+
+
+def planar_start():
+    return PlanarState(x=jnp.array(0.1234), y=jnp.array(0.0567), time=0)
+
+
+def test_cat_map_directions_are_orthogonal():
+    """Arnold's cat map is uniformly hyperbolic, with a symmetric Jacobian, so its CLVs are perpendicular"""
+    cat = PlanarMap(lambda x, y: (jnp.mod(2.0 * x + y, 1.0), jnp.mod(x + y, 1.0)))
+    check = analysis.hyperbolicity(cat, None, planar_start(), n_steps=5_000)
+
+    assert check.verdict == "hyperbolic" and (check.n_unstable, check.n_stable) == (1, 1)
+    np.testing.assert_allclose(check.angles, np.pi / 2, atol=1e-8)
+
+
+def test_lozi_is_hyperbolic_and_henon_is_not():
+    """Lozi (a = 1.7, b = 0.5) is hyperbolic (Misiurewicz 1980), Hénon has homoclinic tangencies"""
+    lozi = PlanarMap(lambda x, y: (1.0 - 1.7 * jnp.abs(x) + y, 0.5 * x))
+    assert analysis.hyperbolicity(lozi, None, planar_start()).min_angle > 0.3
+
+    env, params = bifurcagym.make("HenonMap-v0", cont_state=True, cont_action=True)
+    _, state = env.reset(params, jrandom.key(1))
+    henon = analysis.hyperbolicity(env, params, state)
+    assert henon.verdict == "non-hyperbolic" and henon.min_angle < 1e-3
+
+
+@pytest.mark.parametrize("env_id, params_changes, verdict", [("TentMap-v0", {"init_mu": 1.9}, "hyperbolic"),
+                                                            ("LogisticMap-v0", {"init_r": 4.0}, "non-hyperbolic")])
+def test_one_dimensional_maps_need_uniform_expansion(env_id, params_changes, verdict):
+    """No stable direction, so the test is every step's log|f'| > 0, which the logistic map's critical point breaks"""
+    env, params = bifurcagym.make(env_id, cont_state=True, cont_action=True)
+    params = params.replace(**params_changes)
+    _, state = env.reset(params, jrandom.key(1))
+    check = analysis.hyperbolicity(env, params, state, n_steps=5_000)
+
+    assert check.verdict == verdict and check.angles is None and check.n_stable == 0
+    if verdict == "hyperbolic":
+        np.testing.assert_allclose(check.min_expansion, np.log(1.9), rtol=1e-10)
+
+
+def test_lorenz_has_a_dominated_splitting_and_rossler_tangencies():
+    """
+    Lorenz63 is singular hyperbolic (Tucker 2002), its minimum angle levels off well above zero. Rössler's keeps
+    falling as the run lengthens, inconclusive over a short run, non-hyperbolic over a long one
+    """
+    def check(env_id, n_steps):
+        env, params = bifurcagym.make(env_id, cont_state=True, cont_action=True)
+        _, state = env.reset(params, jrandom.key(1))
+        return analysis.hyperbolicity(env, params, state, n_steps=n_steps)
+
+    lorenz = check("Lorenz63-v0", 20_000)
+    assert lorenz.verdict == "hyperbolic" and (lorenz.n_unstable, lorenz.n_neutral, lorenz.n_stable) == (1, 1, 1)
+    assert check("Rossler-v0", 20_000).verdict == "inconclusive"
+    assert check("Rossler-v0", 100_000).verdict == "non-hyperbolic"
+
+
+def test_hyperbolicity_does_not_apply_without_chaos():
+    env, params = bifurcagym.make("LogisticMap-v0", cont_state=True, cont_action=True)
+    params = params.replace(init_r=2.8)
+    _, state = env.reset(params, jrandom.key(1))
+
+    assert analysis.hyperbolicity(env, params, state, n_steps=5_000).verdict == "not applicable"

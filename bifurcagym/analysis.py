@@ -228,13 +228,18 @@ def lyapunov_spectrum(env,
     log_growth, finite = _benettin(base, params, state, _action_fn(env, params, action, policy), n_steps, n_transient,
                                    n_exponents, method, d0, key)
 
+    return _spectrum_from_growth(log_growth, finite, n_batches, step_duration(env, params))
+
+
+def _spectrum_from_growth(log_growth: chex.Array, finite, n_batches: int, duration: float | None) -> LyapunovSpectrum:
+    """Exponents (largest first) and their batch means standard errors from the per step log growth"""
+    n_steps, n_exponents = log_growth.shape
     per_step = jnp.mean(log_growth, axis=0)
     order = jnp.argsort(per_step)[::-1]
     per_step = per_step[order]
     batch_means = jnp.mean(jnp.reshape(log_growth[:n_steps - n_steps % n_batches], (n_batches, -1, n_exponents)),
                            axis=1)[:, order]
     stderr = jnp.std(batch_means, axis=0, ddof=1) / np.sqrt(n_batches)
-    duration = step_duration(env, params)
 
     return LyapunovSpectrum(per_step=per_step,
                             per_time=None if duration is None else per_step / duration,
@@ -286,6 +291,159 @@ def kaplan_yorke_dimension(exponents: chex.Array) -> float:
         return float(k)
 
     return float(k + partial_sums[k - 1] / abs(exponents[k]))
+
+
+class HyperbolicityCheck(NamedTuple):
+    verdict: str  # "hyperbolic", "non-hyperbolic", "inconclusive" or "not applicable"
+    spectrum: LyapunovSpectrum
+    n_unstable: int
+    n_neutral: int
+    n_stable: int
+    angles: np.ndarray | None
+    min_angle: float | None
+    low_angle: float | None  # the `quantile` quantile of the angles
+    min_expansion: float | None  # 1D maps: smallest per step log|f'|, uniformly expanding if positive
+    evidence: str
+
+
+@partial(jax.jit, static_argnums=(0, 3, 4, 5, 6))
+def _forward_qr(base, params, state, action_fn, n_steps: int, n_transient: int, n_exponents: int, key):
+    """Benettin's forward pass, also keeping each step's orthonormal basis Q and triangular factor R for the CLVs"""
+    converter = _StateVector(state)
+
+    def step(state, key):
+        action_key, step_key = jrandom.split(key)
+        return base.step_env(action_fn(state, action_key), state, params, step_key)[2]
+
+    def burn(state, key):
+        return step(state, key), None
+
+    burn_key, run_key = jrandom.split(key)
+    state, _ = jax.lax.scan(burn, state, jrandom.split(burn_key, n_transient))
+
+    def body(carry, key):
+        state, basis = carry
+        x = converter.to_vec(state)
+
+        def f(vec):
+            new_state = step(converter.from_vec(vec, state), key)
+            return converter.to_vec(new_state), new_state
+
+        _, f_lin, new_state = jax.linearize(f, x, has_aux=True)
+        q, r = jnp.linalg.qr(jax.vmap(f_lin, in_axes=1, out_axes=1)(basis))
+        signs = jnp.where(jnp.diag(r) < 0, -1.0, 1.0).astype(q.dtype)
+        q, r = q * signs, r * signs[:, None]  # still q r = J basis, now with a positive diagonal
+
+        return (new_state, q), (jnp.log(jnp.abs(jnp.diag(r))), q, r)
+
+    basis = jnp.eye(converter.dim, n_exponents, dtype=converter.to_vec(state).dtype)
+    (final_state, _), (log_growth, qs, rs) = jax.lax.scan(body, (state, basis), jrandom.split(run_key, n_steps))
+    finite = ~jnp.any(jnp.isnan(log_growth)) & jnp.all(jnp.isfinite(converter.to_vec(final_state)))
+
+    return log_growth, qs, rs, basis, finite
+
+
+@partial(jax.jit, static_argnums=(3,))
+def _clv_angles(qs: chex.Array, rs: chex.Array, basis: chex.Array, n_split: int, key) -> chex.Array:
+    q_before = jnp.concatenate((basis[None], qs[:-1]), axis=0)  # Q_n, the basis entering step n
+    k = rs.shape[-1]
+    c_last = jnp.triu(jrandom.uniform(key, (k, k), minval=0.5, maxval=1.0, dtype=rs.dtype))
+
+    def backward(c, inputs):
+        q_n, r_next = inputs
+        c = jax.scipy.linalg.solve_triangular(r_next, c, lower=False)
+        c = c / jnp.linalg.norm(c, axis=0)
+        clvs = q_n @ c
+        first, _ = jnp.linalg.qr(clvs[:, :n_split])
+        rest, _ = jnp.linalg.qr(clvs[:, n_split:])
+        cosine = jnp.max(jnp.linalg.svd(first.T @ rest, compute_uv=False))
+
+        return c, jnp.arccos(jnp.clip(cosine, 0.0, 1.0))
+
+    _, angles = jax.lax.scan(backward, c_last / jnp.linalg.norm(c_last, axis=0), (q_before, rs), reverse=True)
+
+    return angles
+
+
+def hyperbolicity(env,
+                  params,
+                  state,
+                  *,
+                  action: chex.Array | None = None,
+                  n_steps: int = 20_000,
+                  n_transient: int = 1_000,
+                  n_converge: int = 1_000,
+                  n_stderr: float = 3.0,
+                  rtol: float = 0.01,
+                  tangency_angle: float = 0.01,
+                  hyperbolic_angle: float = 0.1,
+                  quantile: float = 0.001,
+                  key: chex.PRNGKey | None = None,
+                  n_batches: int = 10,
+                  ) -> HyperbolicityCheck:
+    base = unwrap(env)
+    dim = _StateVector(state).dim
+
+    if dim > _MAX_DEFAULT_EXPONENTS:
+        raise ValueError(f"{base.name} has a {dim} dimensional state, too large for a full CLV computation")
+
+    forward_key, backward_key = jrandom.split(jrandom.key(0) if key is None else key)
+    log_growth, qs, rs, basis, finite = _forward_qr(base, params, state, _action_fn(env, params, action, None),
+                                                    n_steps, n_transient, dim, forward_key)
+    spectrum = _spectrum_from_growth(log_growth, finite, n_batches, step_duration(env, params))
+
+    growth = np.asarray(log_growth)
+    column_means = growth.mean(axis=0)
+    batches = growth[:n_steps - n_steps % n_batches].reshape(n_batches, -1, dim).mean(axis=1)
+    column_stderr = batches.std(axis=0, ddof=1) / np.sqrt(n_batches)
+    tolerance = np.maximum(n_stderr * column_stderr, rtol * float(np.max(np.abs(column_means))))
+    n_unstable = int(np.sum(column_means > tolerance))
+    n_neutral = int(np.sum(np.abs(column_means) <= tolerance))
+    n_stable = dim - n_unstable - n_neutral
+    counts = {"n_unstable": n_unstable, "n_neutral": n_neutral, "n_stable": n_stable}
+    empty = {"angles": None, "min_angle": None, "low_angle": None, "min_expansion": None}
+
+    if not spectrum.finite:
+        return HyperbolicityCheck("not applicable", spectrum, **counts, **empty, evidence="the orbit blew up")
+
+    if n_unstable == 0:
+        return HyperbolicityCheck("not applicable", spectrum, **counts, **empty,
+                                  evidence="no expanding direction, so the orbit is not chaotic")
+
+    if n_stable == 0:
+        min_expansion = float(jnp.min(log_growth[:, :n_unstable]))
+        verdict = "hyperbolic" if min_expansion > 0 else "non-hyperbolic"
+        reading = "positive, uniformly expanding" if min_expansion > 0 else "not positive, e.g. a critical point"
+        evidence = (f"no stable direction, so the test is uniform expansion: the smallest per step log stretching is "
+                    f"{min_expansion:.3g} ({reading})")
+
+        return HyperbolicityCheck(verdict, spectrum, **counts, **{**empty, "min_expansion": min_expansion},
+                                  evidence=evidence)
+
+    if n_steps <= 2 * n_converge:
+        raise ValueError(f"n_steps ({n_steps}) must exceed 2 * n_converge ({n_converge})")
+
+    angles = np.asarray(_clv_angles(qs, rs, basis, n_unstable + n_neutral, backward_key))[n_converge:-n_converge]
+    min_angle = float(np.min(angles))
+    low_angle = float(np.quantile(angles, quantile))
+
+    if low_angle < tangency_angle:
+        verdict, reading = "non-hyperbolic", "collapsing towards zero"
+
+    elif low_angle > hyperbolic_angle:
+        verdict, reading = "hyperbolic", "bounded away from zero"
+
+    else:
+        verdict, reading = "inconclusive", "small but not clearly zero, re-run longer to see if it keeps falling"
+
+    evidence = (f"angle between the centre-unstable ({n_unstable} + {n_neutral} neutral) and stable ({n_stable}) "
+                f"directions: {quantile:.1%} quantile {low_angle:.3g} rad, minimum {min_angle:.3g} rad, {reading}")
+
+    if n_neutral:
+        evidence += " (neutral directions grouped with unstable, a dominated splitting test)"
+
+    return HyperbolicityCheck(verdict, spectrum, **counts, angles=angles, min_angle=min_angle, low_angle=low_angle,
+                              min_expansion=None, evidence=evidence)
 
 
 class DynamicsClassification(NamedTuple):
@@ -549,10 +707,23 @@ def reference_scores(env, params, *, n_episodes: int = 32, key: chex.PRNGKey | N
 
 class BifurcationSweep(NamedTuple):
     values: chex.Array  # (n_values,) the swept parameter
-    samples: chex.Array  # (n_values, n_samples, ...) the observable along the orbit after the transient
+    # (n_values, n_samples, ...) the observable along the orbit after the transient, or with record="peaks" its
+    # successive local maxima, (n_values, n_samples) padded with NaN
+    samples: chex.Array
     lyapunov_per_step: chex.Array | None  # (n_values, n_exponents), largest first, None if not computed
     lyapunov_per_time: chex.Array | None  # per unit time, None for maps or if not computed
     finite: chex.Array  # (n_values,)
+
+
+def _local_maxima(series: chex.Array) -> chex.Array:
+    if series.ndim != 1:
+        raise ValueError(f"record='peaks' needs a scalar observable, got shape {series.shape[1:]} per step")
+
+    middle = series[1:-1]
+    is_peak = (middle > series[:-2]) & (middle >= series[2:])
+    slots = jnp.where(is_peak, jnp.cumsum(is_peak) - 1, series.shape[0])  # non-peaks go out of range and are dropped
+
+    return jnp.full_like(series, jnp.nan).at[slots].set(middle, mode="drop")
 
 
 def _check_sweepable(params, param_name: str):
@@ -578,11 +749,13 @@ def bifurcation_sweep(env,
                       n_samples: int = 200,
                       n_lyapunov_steps: int = 5_000,
                       n_exponents: int = 1,
+                      record: str = "samples",
                       key: chex.PRNGKey | None = None,
                       ) -> BifurcationSweep:
     """
     Only non-static params fields can be swept, a static one (struct.field(False, ...)) needs one env per value.
     """
+
     _check_sweepable(params, param_name)
     base = unwrap(env)
     converter = _StateVector(state)
@@ -604,6 +777,9 @@ def bifurcation_sweep(env,
         settled, _ = jax.lax.scan(step, state, jrandom.split(burn_key, n_transient))
         settled, samples = jax.lax.scan(step, settled, jrandom.split(sample_key, n_samples))
         finite = jnp.all(jnp.isfinite(samples))
+
+        if record == "peaks":
+            samples = _local_maxima(samples)
 
         if n_lyapunov_steps == 0:
             return samples, jnp.zeros((n_exponents,)), finite
