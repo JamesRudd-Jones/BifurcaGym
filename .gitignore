@@ -10,3 +10,4 @@ __pycache__/
 !.idea/bifurcagym.iml
 wandb/
 animations/
+/.python-version

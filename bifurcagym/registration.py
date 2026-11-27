@@ -13,7 +13,6 @@ from bifurcagym.envs.continuous_time_chaos import (arnold_beltrami_childress_flo
                                                    double_gyre_flow,
                                                    kuramoto_sivashinsky,
                                                    lorenz63,
-                                                   quadruple_gyre_flow,
                                                    rossler,
                                                    )
 
@@ -27,8 +26,6 @@ from bifurcagym.envs.fluid_control import (fluidic_pinball,
                                            hydrogym_env,
                                            )
 from bifurcagym.envs.locomotion import (mujoco_locomotion,
-                                        )
-from bifurcagym.envs.other_envs import (ays_iam,
                                         )
 from bifurcagym.wrappers import (AutoResetWrapper,
                                  MetricsWrapper,
@@ -173,14 +170,6 @@ def make(env_id: str,
         else:
             raise ValueError("No Discrete State version.")
 
-    elif env_id == "QuadrupleGyreFlow-v0":
-        if cont_state and cont_action:
-            env = quadruple_gyre_flow.QuadrupleGyreFlowCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = quadruple_gyre_flow.QuadrupleGyreFlowCSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State version.")
-
     elif env_id == "Rossler-v0":
         if cont_state and cont_action:
             env = rossler.RosslerCSCA(**env_kwargs)
@@ -291,13 +280,6 @@ def make(env_id: str,
 
     # # # Other Environments
     ####################################################################################################################
-    elif env_id == "AYSIAM-v0":
-        if cont_state and cont_action:
-            env = ays_iam.AYSIAMCSCA(**env_kwargs)
-        elif cont_state and not cont_action:
-            env = ays_iam.AYSIAMCSDA(**env_kwargs)
-        else:
-            raise ValueError("No Discrete State version.")
 
 
 
@@ -335,7 +317,8 @@ def make(env_id: str,
 
 
 
-    # # # Enables an autoresetting environment that works well with jax.lax.scan, but not necessary for a for loop with conditionals that can't be Jitted
+    # # # Enables an autoresetting environment that works well with jax.lax.scan, but not necessary for a for loop with
+    # conditionals that can't be Jitted
     ####################################################################################################################
     if autoreset:
         env = AutoResetWrapper(env)
@@ -359,7 +342,6 @@ registered_envs = ["Acrobot-v0",
                    "DoubleGyreFlow-v0",
                    "KS-v0",
                    "Lorenz63-v0",
-                   "QuadrupleGyreFlow-v0",
                    "Rossler-v0",
                    "HenonMap-v0",
                    "IkedaMap-v0",
@@ -371,5 +353,4 @@ registered_envs = ["Acrobot-v0",
                    "HydroGym-Channel-v0",
                    "Hopper-v0",
                    "Walker2d-v0",
-                   "AYSIAM-v0"
                    ]
