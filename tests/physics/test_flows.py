@@ -11,7 +11,6 @@ import pytest
 from bifurcagym.envs.continuous_time_chaos import (arnold_beltrami_childress_flow,
                                                    bickley_jet_flow,
                                                    double_gyre_flow,
-                                                   quadruple_gyre_flow,
                                                    )
 from physics_utils import random_states
 
@@ -22,10 +21,10 @@ NUM_POINTS = 256
 
 
 def planar_cases():
-    double_gyre = double_gyre_flow.DoubleGyreFlowCSCA()
-    quadruple_gyre = quadruple_gyre_flow.QuadrupleGyreFlowCSCA()
-    bickley = bickley_jet_flow.BickleyJetFlowCSCA()
-    return {"DoubleGyreFlow": double_gyre, "QuadrupleGyreFlow": quadruple_gyre, "BickleyJetFlow": bickley}
+    return {"DoubleGyreFlow": double_gyre_flow.DoubleGyreFlowCSCA(),
+            "QuadrupleGyreFlow": double_gyre_flow.DoubleGyreFlowCSCA(n_gyre_rows=2),
+            "SixGyreFlow": double_gyre_flow.DoubleGyreFlowCSCA(n_gyre_rows=3),
+            "BickleyJetFlow": bickley_jet_flow.BickleyJetFlowCSCA()}
 
 
 def planar_velocity(env, params):
@@ -51,7 +50,7 @@ def test_planar_flow_is_incompressible(case):
     np.testing.assert_allclose(divergence, 0.0, atol=1e-12)
 
 
-@pytest.mark.parametrize("case", ["DoubleGyreFlow", "QuadrupleGyreFlow"])
+@pytest.mark.parametrize("case", ["DoubleGyreFlow", "QuadrupleGyreFlow", "SixGyreFlow"])
 def test_gyre_walls_have_no_normal_flow(case):
     """The gyres live in a closed box, so the velocity normal to every wall must vanish"""
     env = planar_cases()[case]
@@ -70,6 +69,28 @@ def test_gyre_walls_have_no_normal_flow(case):
 
     for wall in (u_left, u_right, v_bottom, v_top):
         np.testing.assert_allclose(wall, 0.0, atol=1e-12)
+
+
+@pytest.mark.parametrize("n_gyre_rows", [1, 2, 3])
+def test_gyre_rows_alternate_rotation(n_gyre_rows):
+    """Each row is two counter-rotating gyres, and vertically adjacent gyres also rotate in opposite senses"""
+    env = double_gyre_flow.DoubleGyreFlowCSCA(n_gyre_rows=n_gyre_rows)
+    velocity = planar_velocity(env, env.default_params.replace(epsilon=0.0))  # steady, gyre centres at (0.5 + k, row + 0.5)
+
+    def vorticity(x, y):
+        jacobian = jax.jacfwd(velocity)(jnp.array((x, y)), 0.0)
+        return jacobian[1, 0] - jacobian[0, 1]
+
+    signs = np.array([[np.sign(float(vorticity(0.5 + col, row + 0.5))) for col in range(2)]
+                      for row in range(n_gyre_rows)])
+    assert np.all(signs != 0)
+    assert np.all(signs[:, 0] == -signs[:, 1])  # left and right gyres of a row
+    assert np.all(signs[1:, 0] == -signs[:-1, 0])  # rows alternate
+
+
+def test_n_gyre_rows_must_be_a_positive_integer():
+    with pytest.raises(ValueError, match="n_gyre_rows"):
+        double_gyre_flow.DoubleGyreFlowCSCA(n_gyre_rows=0)
 
 
 def test_double_gyre_matches_shadden_closed_form():

@@ -1,5 +1,6 @@
 """
-Physical validity of the Kuramoto-Sivashinsky PDE, the AYS integrated assessment model and Wet Chicken.
+Physical validity of the Kuramoto-Sivashinsky PDE and Wet Chicken. The AYS integrated assessment model's tests moved
+to experimental/other_envs/test_ays_iam.py with the env.
 """
 
 import jax
@@ -9,9 +10,9 @@ import numpy as np
 import pytest
 
 from bifurcagym.envs.classical_control import wet_chicken
+from bifurcagym.envs import utils
 from bifurcagym.envs.continuous_time_chaos import kuramoto_sivashinsky
-from bifurcagym.envs.other_envs import ays_iam
-from physics_utils import lyapunov_spectrum, random_states
+from physics_utils import lyapunov_spectrum
 
 
 pytestmark = pytest.mark.physics
@@ -58,6 +59,37 @@ def test_ks_solver_matches_unforced_tendency():
     np.testing.assert_allclose(traj[0], expected, atol=5 * env.dt ** 2 * float(jnp.max(jnp.abs(ks_rhs(final_state.u, env.L)))) + 1e-3)
 
 
+def test_ks_solvers_converge_to_the_same_solution():
+    """
+    From a state on the attractor, over 1 time unit: every solver approaches a fine ETDRK4 reference, the default IMEX
+    RK3 at second order and ETDRK4 at (at least) fourth order as substeps are refined
+    """
+    env = kuramoto_sivashinsky.KuramotoSivashinskyCSCA()
+    params = env.default_params
+    _, state = env.reset(params, jrandom.key(0))
+    on_attractor, _ = ks_rollout(env, params, state, 4000)  # 2000 steps can still sit on the reset equilibrium
+
+    def after(solver, substeps):
+        solver_env = kuramoto_sivashinsky.KuramotoSivashinskyCSCA(solver=solver, substeps=substeps)
+        return ks_rollout(solver_env, params, on_attractor, 20)[0].u
+
+    imex, etdrk4, rk4 = utils.imex_rk3_step, utils.etdrk4_step, utils.semilinear_rk4_step
+    reference = after(etdrk4, 64)
+    error = {(solver, substeps): float(jnp.max(jnp.abs(after(solver, substeps) - reference)))
+             for solver, substeps in ((imex, 1), (imex, 4), (etdrk4, 1), (etdrk4, 4), (rk4, 256))}
+
+    # Errors this small on an equilibrium would make the order checks vacuous, so require a moving state
+    assert error[(imex, 1)] > 1e-9, "still on the reset equilibrium, the convergence check is meaningless"
+    assert error[(imex, 1)] < 1e-5 and error[(etdrk4, 1)] < 1e-6 and error[(rk4, 256)] < 1e-10
+    assert error[(imex, 4)] < error[(imex, 1)] / 4 ** 1.8  # second order
+    assert error[(etdrk4, 4)] < error[(etdrk4, 1)] / 4 ** 3  # fourth order, with some slack
+
+
+def test_ks_default_solver_is_unchanged():
+    env = kuramoto_sivashinsky.KuramotoSivashinskyCSCA()
+    assert (env.solver, env.substeps) == (utils.imex_rk3_step, 1)
+
+
 def test_ks_conserves_mean_and_stays_bounded():
     env = kuramoto_sivashinsky.KuramotoSivashinskyCSCA()
     params = env.default_params
@@ -80,92 +112,6 @@ def test_ks_is_chaotic():
 
     exponents = lyapunov_spectrum(step_fn, state.u, n_steps=40_000, n_transient=4_000, n_exponents=2) / env.dt
     np.testing.assert_allclose(exponents[0], 0.043, atol=0.015)
-
-
-# # # AYS: Kittel et al. (2017) model in physical units, then compactified to [0, 1]^3
-########################################################################################################################
-A_MID, Y_MID, S_MID = 240.0, 7e13, 5e11
-
-
-def ays_physical_rhs(params, action):
-    """dA/dt = Gamma Y / (eps phi) - A / tau_A, dY/dt = beta Y - theta A Y, dS/dt = (1 - Gamma) Y / eps - S / tau_S"""
-    beta = params.beta * action[0]  # low growth halves beta
-    sigma = params.sigma * 0.5 ** (action[1] / params.rho)  # energy transition lowers the renewable break even cost
-
-    def f(phys):
-        a, y, s = phys
-        gamma = 1.0 / (1.0 + (s / sigma) ** params.rho)
-        return jnp.array((gamma * y / (params.eps * params.phi) - a / params.tau_A,
-                          beta * y - params.theta * a * y,
-                          (1.0 - gamma) * y / params.eps - s / params.tau_S))
-    return f
-
-
-def to_physical(ays):
-    mids = jnp.array((A_MID, Y_MID, S_MID))
-    return mids * ays / (1.0 - ays)
-
-
-def to_compact(phys):
-    mids = jnp.array((A_MID, Y_MID, S_MID))
-    return phys / (phys + mids)
-
-
-def ays_compact_rhs(params, action):
-    f = ays_physical_rhs(params, action)
-
-    def g(ays):
-        phys = to_physical(ays)
-        _, compact_rate = jax.jvp(to_compact, (phys,), (f(phys),))
-        return compact_rate
-    return g
-
-
-@pytest.mark.parametrize("param_changes", [{}, dict(sigma=2e12, rho=3.0, beta=0.025)])
-def test_ays_matches_published_model(param_changes):
-    env = ays_iam.AYSIAMCSCA()
-    params = env.default_params.replace(**param_changes)
-    points = random_states(jrandom.key(0), 256, 0.05 * jnp.ones(3), 0.95 * jnp.ones(3))
-
-    for action in env.action_array:
-        actual = jax.vmap(lambda s: env._ays_rhs(0.0, s, action, params))(points)
-        expected = jax.vmap(ays_compact_rhs(params, action))(points)
-        np.testing.assert_allclose(actual, expected, rtol=1e-8, err_msg=f"action {action}, params {param_changes}")
-
-
-def test_ays_stays_in_the_unit_cube():
-    env = ays_iam.AYSIAMCSDA()
-    params = env.default_params
-
-    def episode(key):
-        reset_key, action_key = jrandom.split(key)
-        _, state = env.reset(params, reset_key)
-
-        def body(state, key):
-            action_key, step_key = jrandom.split(key)
-            action = env.action_space(params).sample(action_key)
-            _, _, new_state, _, _, _ = env.step(action, state, params, step_key)
-            return new_state, new_state.ays
-
-        return jax.lax.scan(body, state, jrandom.split(action_key, 500))[1]
-
-    trajs = jax.vmap(episode)(jrandom.split(jrandom.key(1), 64))
-    assert jnp.all(jnp.isfinite(trajs)) and jnp.all(trajs >= 0.0) and jnp.all(trajs <= 1.0)
-
-
-def test_ays_default_policy_reaches_the_black_fixed_point():
-    """Business as usual (no management) should end at the high carbon, low renewables attractor"""
-    env = ays_iam.AYSIAMCSDA()
-    params = env.default_params
-    _, state = env.reset(params, jrandom.key(2))
-    action = jnp.array((0,))  # no management option
-
-    def body(state, key):
-        _, _, new_state, _, _, _ = env.step(action, state, params, key)
-        return new_state, None
-
-    final_state, _ = jax.lax.scan(body, state, jrandom.split(jrandom.key(3), 3000))
-    assert float(jnp.linalg.norm(final_state.ays - params.black_fp)) < params.final_radius
 
 
 # # # Wet Chicken: Hans and Udluft (2009), drift v = 3x / w and turbulence s = 3.5 - v

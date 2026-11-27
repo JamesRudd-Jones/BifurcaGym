@@ -15,13 +15,8 @@ import pytest  # noqa: E402
 # Must be set before bifurcagym is imported, as env param defaults are built as jnp arrays at import time
 jax.config.update("jax_enable_x64", True)
 
-# Persistent compilation cache shared by the xdist workers, so repeat runs skip most of the jit compilation (which
-# dominates the run time). Kept outside the repo, override with BIFURCAGYM_JAX_CACHE_DIR, delete the folder to reset
-jax.config.update("jax_compilation_cache_dir",
-                  os.environ.get("BIFURCAGYM_JAX_CACHE_DIR",
-                                 os.path.join(os.path.expanduser("~"), ".cache", "bifurcagym", "jax_test_cache")))
-jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.1)  # default 1 s skips most of the small env jits
-jax.config.update("jax_compilation_cache_max_size", 4 * 1024 ** 3)  # bytes, least recently used entries evicted
+# No persistent compilation cache: one was tried (Nov 2026) and cached executables changed results, e.g.
+# DoubleGyreFlow's random starts broke their start exclusion on the second run, only when read from the cache
 
 import bifurcagym  # noqa: E402
 
