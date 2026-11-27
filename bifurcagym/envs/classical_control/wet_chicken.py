@@ -87,9 +87,9 @@ class WetChickenCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,  # TODO check reward is the correct way around
                 done,
                 {})
@@ -276,9 +276,9 @@ class WetChickenDSDA(WetChickenCSDA):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
@@ -300,9 +300,8 @@ def plot_some_stuff():
     key = jrandom.PRNGKey(0)
     env = WetChickenCSCA()
 
-    # Collect data over multiple episodes
     n_episodes = 10#00
-    steps_per_episode = 200  # Fixed number of steps per episode
+    steps_per_episode = 200
     velocity_data = []
     turbulence_data = []
     reward_data = []
@@ -313,70 +312,58 @@ def plot_some_stuff():
         obs, env_state = env.reset(_key)
 
         for step in range(steps_per_episode):
-            # Store current state data
             positions.append(obs[1])  # y position
             velocity = env.max_velocity * obs[1] / env.width
             velocity_data.append(velocity)
 
-            # Get turbulence for current state
-            turbulence = env._turbulence(env_state)  # Note: accessing protected method for visualization
+            turbulence = env._turbulence(env_state)
             turbulence_data.append(turbulence)
 
-            # Take random action
             key, _key = jrandom.split(key)
             action = env.action_space().sample(_key)
             key, _key = jrandom.split(key)
             obs, delta_obs, env_state, rew, done, info = env.step(action, env_state, _key)
             reward_data.append(rew)
 
-    # Convert to numpy arrays
     positions = jnp.array(positions)
     velocity_data = jnp.array(velocity_data)
     turbulence_data = jnp.array(turbulence_data)
     reward_data = jnp.array(reward_data)
 
-    # Create figure with subplots
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12))
 
-    # Plot 1: Velocity vs Position
     ax1.scatter(positions, velocity_data, alpha=0.1, color='blue', label='Observed')
     ax1.set_xlabel('Position (y)')
     ax1.set_ylabel('Velocity')
     ax1.set_title('Velocity vs Position')
     ax1.grid(True)
 
-    # Theoretical velocity line
     y_pos = jnp.linspace(0, env.width, 100)
     theoretical_velocity = env.max_velocity * y_pos / env.width
     ax1.plot(y_pos, theoretical_velocity, 'r--', label='Theoretical')
     ax1.legend()
 
-    # Plot 2: Turbulence vs Position
     ax2.scatter(positions, turbulence_data, alpha=0.1, color='green')
     ax2.set_xlabel('Position (y)')
     ax2.set_ylabel('Turbulence')
     ax2.set_title('Turbulence vs Position')
     ax2.grid(True)
 
-    # Add theoretical turbulence bounds
     theoretical_velocity = env.max_velocity * y_pos / env.width
     max_turbulence = env.max_turbulence - theoretical_velocity
     ax2.plot(y_pos, max_turbulence, 'r--', label='Max Turbulence')
     ax2.plot(y_pos, -max_turbulence, 'r--', label='Min Turbulence')
     ax2.legend()
 
-    # Plot 3: Reward vs Position
     ax3.scatter(positions, reward_data, alpha=0.1, color='purple')
     ax3.set_xlabel('Position (y)')
     ax3.set_ylabel('Reward')
     ax3.set_title('Reward vs Position')
     ax3.grid(True)
 
-    # Adjust layout and display
     plt.tight_layout()
     plt.show()
 
-    # Print some statistics
     print(f"\nStatistics over {n_episodes} episodes:")
     print(f"Average velocity: {jnp.mean(velocity_data):.2f}")
     print(f"Average turbulence: {jnp.mean(turbulence_data):.2f}")
@@ -390,12 +377,10 @@ def plot_2d_stuff():
     key = jrandom.PRNGKey(0)
     env = WetChickenCSCA()
 
-    # Parameters for data collection
     n_episodes = 400
     steps_per_episode = 2000
 
-    # Create grid for storing average values
-    grid_size = 50  # Resolution of our grid
+    grid_size = 50
     velocity_grid = np.zeros((grid_size, grid_size))
     turbulence_grid = np.zeros((grid_size, grid_size))
     reward_grid = np.zeros((grid_size, grid_size))
@@ -406,40 +391,32 @@ def plot_2d_stuff():
         obs, env_state = env.reset(_key)
 
         for step in range(steps_per_episode):
-            # Get current x, y position
             x, y = obs
 
-            # Find grid cell
             x_idx = int(jnp.clip(x * (grid_size - 1) / env.width, 0, grid_size - 1))
             y_idx = int(jnp.clip(y * (grid_size - 1) / env.length, 0, grid_size - 1))
 
-            # Calculate values
             velocity = env._velocity(env_state)  # env.y_hat
             turbulence = env._turbulence(env_state)
 
-            # Take random action
             key, _key = jrandom.split(key)
             action = env.action_space().sample(_key)
             key, _key = jrandom.split(key)
             with jax.disable_jit(disable=False):
                 obs, delta_obs, env_state, rew, done, info = env.step(action, env_state, _key)
 
-            # Update grids
             velocity_grid[x_idx, y_idx] += velocity
             turbulence_grid[x_idx, y_idx] += turbulence
             reward_grid[x_idx, y_idx] += rew
             visit_count[x_idx, y_idx] += 1
 
-    # Average the grids where visited
     mask = visit_count > 0
     velocity_grid[mask] /= visit_count[mask]
     turbulence_grid[mask] /= visit_count[mask]
     reward_grid[mask] /= visit_count[mask]
 
-    # Create figure with subplots
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 15))
 
-    # Plot 1: Velocity Heatmap
     im1 = ax1.imshow(velocity_grid.T, origin='lower', extent=[0, env.width, 0, env.length],
                      aspect='auto', cmap='viridis')
     ax1.set_title('Velocity across X-Y plane')
@@ -447,7 +424,6 @@ def plot_2d_stuff():
     ax1.set_ylabel('Y Position')
     plt.colorbar(im1, ax=ax1, label='Velocity')
 
-    # Plot 2: Turbulence Heatmap
     im2 = ax2.imshow(turbulence_grid.T, origin='lower', extent=[0, env.width, 0, env.length],
                      aspect='auto', cmap='RdBu')
     ax2.set_title('Turbulence across X-Y plane')
@@ -455,7 +431,6 @@ def plot_2d_stuff():
     ax2.set_ylabel('Y Position')
     plt.colorbar(im2, ax=ax2, label='Turbulence')
 
-    # Plot 3: Reward Heatmap
     im3 = ax3.imshow(reward_grid.T, origin='lower', extent=[0, env.width, 0, env.length],
                      aspect='auto', cmap='plasma')
     ax3.set_title('Reward across X-Y plane')
@@ -463,7 +438,6 @@ def plot_2d_stuff():
     ax3.set_ylabel('Y Position')
     plt.colorbar(im3, ax=ax3, label='Reward')
 
-    # Plot 4: Visit Count Heatmap (log scale for better visualization)
     visit_count_log = jnp.log1p(visit_count)  # log1p to handle zeros
     im4 = ax4.imshow(visit_count_log.T, origin='lower', extent=[0, env.width, 0, env.length],
                      aspect='auto', cmap='YlOrRd')
@@ -475,7 +449,6 @@ def plot_2d_stuff():
     plt.tight_layout()
     plt.show()
 
-    # Print some statistics about the coverage
     print(f"\nStatistics over {n_episodes} episodes ({n_episodes * steps_per_episode} total steps):")
     print(f"Percentage of grid cells visited: {100 * jnp.sum(visit_count > 0) / (grid_size * grid_size):.1f}%")
     print(f"Average visits per cell (where visited): {jnp.mean(visit_count[visit_count > 0]):.1f}")
@@ -489,7 +462,7 @@ if __name__ == "__main__":
     key = jrandom.PRNGKey(0)
     env = WetChickenCSCA()
 
-    num_steps = 200  # Fixed number of steps per episode
+    num_steps = 200
 
     key, _key = jrandom.split(key)
     obs, env_state = env.reset(_key)

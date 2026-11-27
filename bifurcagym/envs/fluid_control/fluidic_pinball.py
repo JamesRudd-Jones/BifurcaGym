@@ -139,9 +139,9 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
@@ -230,13 +230,10 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
     def _calculate_forces(self, f_pre_collision, f_post_collision, params: EnvParams):
         """
-        Optimised calculation using einsum to avoid intermediate array allocations.
-        Calculates Sum(mask * (f_post - f_pre) * c) in a single pass.
+        Calculates Sum(mask * (f_post - f_pre) * c)
         """
-        # Compute the momentum change
         delta_f = f_post_collision - f_pre_collision
 
-        # Use einsum to contract dimensions efficiently.
         # String '...,...q,qd->d':
         #   '...' : Matches spatial dimensions (Nx, Ny) of the mask and f
         #   'q'   : Matches the discrete velocity direction (Q)
@@ -249,12 +246,10 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
         #   - Returns vector d (fx, fy)
 
         momentum_change = jnp.einsum('...,...q,qd->d',
-                                     params.mask_solid.astype(delta_f.dtype),  # Ensure mask is float
+                                     params.mask_solid.astype(delta_f.dtype),  # ensure mask is float
                                      delta_f,
                                      params.c)
 
-        # That is the momentum the fluid gains at the solid nodes, the force on the cylinders is equal and opposite,
-        # so drag (x component) is positive for the inlet flow pushing the cylinders downstream
         return -momentum_change
 
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -364,12 +359,12 @@ class FluidicPinballCSCA(base_env.BaseEnvironment):
 
             return dot, pcm  # , arrow
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=len(fs),
                                        interval=200,
                                        blit=True)
+
         anim.save(f"{file_path}_{self.name}.gif")
         plt.close()
 

@@ -86,9 +86,9 @@ class CartPoleCSDA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {"discount": self.discount(done)})
@@ -228,11 +228,10 @@ class CartPoleCSDA(base_env.BaseEnvironment):
 
             return line, dot, cart
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=thetas.shape[0],
-                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")

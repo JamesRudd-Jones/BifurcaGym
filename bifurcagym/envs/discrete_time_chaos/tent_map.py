@@ -63,9 +63,9 @@ class TentMapCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})

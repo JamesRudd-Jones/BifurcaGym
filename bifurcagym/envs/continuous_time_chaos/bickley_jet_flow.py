@@ -80,7 +80,6 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
         new_x = new_state_arr[0]
         new_y = new_state_arr[1]
 
-        # Handle Boundaries:
         new_x = new_x % self.x_len  # X is Periodic
         new_y = jnp.clip(new_y, self.y_bounds[0], self.y_bounds[1])
 
@@ -88,9 +87,9 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
@@ -103,18 +102,11 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
         # sigma = k * c (phase speed relation)
         sigma = params.k * params.c
 
-        # Reshape for broadcasting if inputs are arrays
         k_grid = params.k
         sigma_grid = sigma
         eps_grid = params.epsilon
 
-        # Argument for cosine term: kx - sigma*t
-        # Note: We must be careful with shapes if x/y are batches.
-        # Assuming scalar or simple array x/y here.
-
         phase = jnp.outer(x, k_grid) - sigma_grid * t
-        # If x is scalar, phase is shape (3,). If x is (N,), phase is (N, 3)
-        # We adjust dimensions to ensure summation works correctly.
         phase = phase.squeeze()
 
         # Perturbation terms
@@ -124,7 +116,6 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
         sech_sq = (1.0 / jnp.cosh(y / params.L)) ** 2
         tanh_y = jnp.tanh(y / params.L)
 
-        # Summation over the 3 waves
         cos_phase = jnp.cos(phase)
         sin_phase = jnp.sin(phase)
 
@@ -152,8 +143,6 @@ class BickleyJetFlowCSCA(base_env.BaseEnvironment):
                                  params: EnvParams,
                                  key: chex.PRNGKey = None,
                                  ) -> Tuple[chex.Array, chex.Array]:
-        # Standard distance metric with periodic adjustment for X?
-        # For simplicity assume standard Euclidean, but strict periodicity usually requires dx = min(|x1-x2|, L - |x1-x2|).
         dx = jnp.abs(state_t.x - self.goal_state[0])
         dx = jnp.minimum(dx, self.x_len - dx)  # Periodic distance
         dy = state_t.y - self.goal_state[1]

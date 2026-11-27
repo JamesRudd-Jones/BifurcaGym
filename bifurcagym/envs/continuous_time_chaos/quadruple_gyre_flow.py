@@ -79,9 +79,9 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
@@ -173,7 +173,6 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
         initial_U_fine, initial_V_fine = self._get_flow_velocity(X_fine, Y_fine, times[0] * self.dt, get_curr_param(params, 0))
         speed0 = np.sqrt(initial_U_fine ** 2 + initial_V_fine ** 2)
 
-        # Setup animation elements
         line, = ax.plot([], [], 'r-', lw=2, label='Agent Trail', zorder=3)
         dot, = ax.plot([], [], color="magenta", marker="o", markersize=10, label='Current State', zorder=5)
         pcm = ax.pcolormesh(X_fine, Y_fine, speed0, cmap=cmap_val, shading='auto', vmin=0,
@@ -206,7 +205,6 @@ class QuadrupleGyreFlowCSCA(base_env.BaseEnvironment):
 
             return line, dot, pcm, arrow
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=len(times),

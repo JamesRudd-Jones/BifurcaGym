@@ -27,12 +27,6 @@ class EnvParams:
 class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
 
     def __init__(self, lipschitz_reward: bool = False, random_start: bool = False, **env_kwargs):
-        """
-        lipschitz_reward: reward is minus the distance to the goal and episodes end only at the time limit, so the
-            reward is 1-Lipschitz and there is no goal-termination discontinuity. Default is the -0.01 per step, +10 at
-            the goal, terminating reward.
-        random_start: uniform start over the domain, at least start_exclusion from the goal. Default is fixed (0.2, 0.2).
-        """
         super().__init__(**env_kwargs)
 
         self.lipschitz_reward: bool = lipschitz_reward
@@ -91,9 +85,9 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
         obs_tp1 = self.get_obs(new_state)
         obs = self.get_obs(state)
 
-        return (jax.lax.stop_gradient(obs_tp1),
-                jax.lax.stop_gradient(obs_tp1 - obs),
-                jax.lax.stop_gradient(new_state),
+        return (obs_tp1,
+                obs_tp1 - obs,
+                new_state,
                 reward,
                 done,
                 {})
@@ -138,6 +132,7 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
 
         reward = jnp.array(-0.01)  # Time penalty
         # TODO a goal based reward or some distance metric?
+
         reward += jax.lax.select(done, 10.0, 0.0)
 
         fin_done = jnp.logical_or(done, state_tp1.time >= self.max_steps_in_ep)

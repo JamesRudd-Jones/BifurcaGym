@@ -15,8 +15,14 @@ class EnvState(base_env.EnvState):
 
 @struct.dataclass
 class EnvParams:
+    init_r: float = 3.8
     max_control: float = 0.1
     maximum_max_control: float = struct.field(False, default=0.1)  # maximum to ensure correct scaling
+
+    @property
+    def fixed_point(self) -> float:
+        """Period 1 fixed point, r x (1 - x) = x gives x = (r - 1) / r"""
+        return (self.init_r - 1.0) / self.init_r
 
 
 class LogisticMapCSCA(base_env.BaseEnvironment):
@@ -38,31 +44,11 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         self.random_start_range_lower: float = 0.0
         self.random_start_range_upper: float = 1.0
 
-        self.init_r: float = init_r
-        # init_r: float = 2.5
-        # init_r: float = 3.1
-        # init_r: float = 3.8
-        # init_r: float = 4.0
+        self.init_r: float = init_r  # default for params.init_r, e.g. 2.5 (period 1), 3.1 (period 2), 4.0 (fully chaotic)
 
     @property
     def default_params(self) -> EnvParams:
-        return EnvParams()
-
-    @property
-    def fixed_point(self) -> float:
-        """
-        Setting as a property ensures that changing self.init_r should change this as well when used
-        Period-1 fixed point r*x*(1-x) = x  => x = (r-1)/r  (guard r==0)."""
-
-        # fixed_point: float = 0.6  # for r = 2.5; period 1
-        # fixed_point: float = 0.55801  # for r = 3.1; period 2
-        # fixed_point: float = 0.76457  # for r = 3.1; period 2
-        # fixed_point: float = 0.67742  # for r = 3.1; period 1
-        # self.fixed_point: float = 0.737  # for r = 3.8; chaotic
-
-        # TODO is there a better way to do this to prevent the repetitive computation?
-
-        return (self.init_r - 1.0) / self.init_r
+        return EnvParams(init_r=self.init_r)
 
     def step_env(self,
                  input_action: chex.Numeric,
@@ -72,15 +58,15 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
                  ) -> Tuple[chex.Array, chex.Array, EnvState, chex.Array, chex.Array, Dict[Any, Any]]:
         action = self.action_convert(input_action, params)
 
-        new_x = (action + self.init_r) * state.x * (1 - state.x)
+        new_x = (action + params.init_r) * state.x * (1 - state.x)
 
         new_state = EnvState(x=new_x, time=state.time+1)
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
@@ -109,7 +95,7 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         As per the paper titled: Optimal chaos control through reinforcement learning
         "https://pubs.aip.org/aip/cha/article/9/3/775/136623/Optimal-chaos-control-through-reinforcement"
         """
-        reward = -jnp.abs(state_tp1.x - self.fixed_point) ** 2
+        reward = -jnp.abs(state_tp1.x - params.fixed_point) ** 2
 
         done = state_tp1.time >= self.max_steps_in_ep
 
@@ -142,7 +128,7 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
         ax.set_ylabel("State (x)")
         ax.grid(True, linestyle='--', alpha=0.6)
 
-        fixed_pt = self.fixed_point
+        fixed_pt = float(params.fixed_point)
         ax.axhline(fixed_pt, color='k', linestyle='--', lw=1.5, label="Fixed Point", zorder=1)
 
         line, = ax.plot([], [], color='blue', linestyle='-', lw=1.0, alpha=0.7, marker='.', markersize=4, zorder=2)
@@ -157,7 +143,6 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
 
             return line, dot
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=len(xs),
@@ -165,7 +150,6 @@ class LogisticMapCSCA(base_env.BaseEnvironment):
                                        blit=True
                                        )
 
-        # Save the resulting gif
         anim.save(f"{file_path}_{self.name}.gif")
         plt.close()
 

@@ -107,9 +107,9 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
@@ -183,7 +183,6 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
             # cbar = fig.colorbar(im, ax=ax, orientation='vertical', pad=0.05, shrink=0.75, label="U Value")
             # TODO adding the above in causes some crazy animation, it is fun though so I have left in for your experience
 
-            # Set the limits again, or you can adjust them dynamically as needed
             ax.set_title(self.name)
             ax.set_xlim(times[0], times[-1])
             ax.set_xlabel("Time")
@@ -191,11 +190,10 @@ class KuramotoSivashinskyCSCA(base_env.BaseEnvironment):
 
             return im,
 
-        # Create the animation
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=len(times),
-                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,
                                        blit=True
                                        )
         anim.save(f"{file_path}_{self.name}.gif")

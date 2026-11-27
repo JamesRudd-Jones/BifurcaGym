@@ -92,9 +92,9 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {"discount": self.discount(done)})
@@ -169,7 +169,6 @@ class NCartPoleCSDA(base_env.BaseEnvironment):
     def _angle_normalise(x):
         return ((x + jnp.pi) % (2 * jnp.pi)) - jnp.pi
 
-    # @partial(jax.jit, static_argnums=(0, 1))
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
         loc = jnp.array([0.0, 0.0])
         scale = jnp.array([0.02, 0.02])

@@ -78,9 +78,9 @@ class ChuaCSCA(base_env.BaseEnvironment):
         obs_new = self.get_obs(new_state)
         obs_old = self.get_obs(state)
 
-        return (jax.lax.stop_gradient(obs_new),
-                jax.lax.stop_gradient(obs_new - obs_old),
-                jax.lax.stop_gradient(new_state),
+        return (obs_new,
+                obs_new - obs_old,
+                new_state,
                 reward,
                 done,
                 {})
@@ -174,7 +174,7 @@ class ChuaCSCA(base_env.BaseEnvironment):
         anim = animation.FuncAnimation(fig,
                                        update,
                                        frames=states.shape[0],
-                                       interval=self.dt * 1000,  # Convert dt to milliseconds
+                                       interval=self.dt * 1000,
                                        blit=False
                                        )
 

@@ -1,11 +1,10 @@
 """
-Wrappers exposing the pure JAX environments of HydroGym through the BifurcaGym API:
+Wrappers to use HydroGym through the BifurcaGym API:
 https://github.com/dynamicslab/hydrogym
 https://proceedings.mlr.press/v283/lagemann25a.html
 
-Requires the optional dependency group: `pdm install -G hydrogym`. HydroGym is imported lazily, so the rest of
-BifurcaGym works without it. Only HydroGym's JAX backend is wrapped, its Firedrake, MAIA and NEK5000 backends cannot be
-jitted or vmapped.
+Requires the optional dependency group: `pdm install -G hydrogym`. Only HydroGym's JAX backend is wrapped, its Firedrake,
+MAIA and NEK5000 backends cannot be jitted or vmapped.
 
 The HydroGym solvers are called directly rather than through their gymnax `step_env`, as in hydrogym 1.0.0 the
 Kolmogorov `step_env` raises under gymnax>=1.0 (no `is_terminated`), and the Channel `step_env` computes an unused
@@ -34,7 +33,7 @@ def _import_hydrogym(module: str):
 
 # # # Kolmogorov Flow
 ########################################################################################################################
-KOLMOGOROV_MAX_OBS = 6.0  # random control rollouts reach ~3.7 after 25 steps with TKE still slowly rising
+KOLMOGOROV_MAX_OBS = 6.0
 
 
 @struct.dataclass
@@ -51,7 +50,7 @@ class KolmogorovEnvParams:
     maximum_max_control: float = struct.field(False, default=0.5)  # maximum to ensure correct scaling
 
     init_noise: float = 0.1  # RMS of the random initial vorticity perturbation, 0 reproduces HydroGym's reset
-    noise_kmax: int = struct.field(False, default=4)  # Only perturb wavenumbers with |k| <= noise_kmax
+    noise_kmax: int = struct.field(False, default=4)
 
 
 class KolmogorovFlowCSCA(base_env.BaseEnvironment):
@@ -109,9 +108,9 @@ class KolmogorovFlowCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
@@ -280,9 +279,9 @@ class ChannelFlowCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})

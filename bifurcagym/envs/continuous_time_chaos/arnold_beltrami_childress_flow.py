@@ -38,13 +38,6 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
     State evolves via Euler integration.
     """
     def __init__(self, lipschitz_reward: bool = False, random_start: bool = False, **env_kwargs):
-        """
-        lipschitz_reward: reward is minus the torus distance to the goal and episodes end only at the time limit, so
-            the reward is 1-Lipschitz and there is no goal-termination discontinuity. Default is the -0.01 per step,
-            +10 at the goal, terminating reward.
-        random_start: uniform start over the torus, at least start_exclusion from the goal. Default is within 0.001
-            of (0.2, 0.2, 0.2).
-        """
         super().__init__(**env_kwargs)
 
         self.lipschitz_reward: bool = lipschitz_reward
@@ -107,9 +100,9 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
         obs_tp1 = self.get_obs(new_state)
         obs_t = self.get_obs(state)
 
-        return (jax.lax.stop_gradient(obs_tp1),
-                jax.lax.stop_gradient(obs_tp1 - obs_t),
-                jax.lax.stop_gradient(new_state),
+        return (obs_tp1,
+                obs_tp1 - obs_t,
+                new_state,
                 reward,
                 done,
                 {},
@@ -182,7 +175,6 @@ class ABCFlowCSCA(base_env.BaseEnvironment):
         return reward, fin_done
 
     def action_convert(self, action: chex.Numeric, params: EnvParams) -> chex.Numeric:
-        # Continuous control in R^3, clipped componentwise
         return jnp.clip(action, -params.max_speed, params.max_speed)
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:

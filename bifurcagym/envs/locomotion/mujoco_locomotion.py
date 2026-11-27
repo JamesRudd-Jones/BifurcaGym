@@ -3,9 +3,8 @@ Hopper and Walker2d from Gymnasium's MuJoCo suite (v5), simulated with MJX, the 
 https://gymnasium.farama.org/environments/mujoco/
 https://mujoco.readthedocs.io/en/stable/mjx.html
 
-Requires the optional dependency group: `pdm install -G mujoco`. MuJoCo is imported lazily, so the rest of BifurcaGym
-works without it. The models in `assets/` are Gymnasium's `hopper.xml` and `walker2d_v5.xml`, unchanged (MIT licence,
-see `assets/LICENSE_GYMNASIUM`).
+Requires the optional dependency group: `pdm install -G mujoco`. The models in `assets/` are Gymnasium's `hopper.xml`
+and `walker2d_v5.xml`, unchanged (MIT licence, see `assets/LICENSE_GYMNASIUM`).
 
 Rewards, termination, frame skip, reset noise and observations follow the Gymnasium v5 defaults, except that:
     - The torso pitch in the observation is wrapped to [-pi, pi] (a periodic dimension), so the observation space is
@@ -134,19 +133,20 @@ class HopperCSCA(base_env.BaseEnvironment):
 
         reward, done = self.reward_and_done_function(input_action, state, new_state, params, key)
 
-        return (jax.lax.stop_gradient(self.get_obs(new_state)),
-                jax.lax.stop_gradient(self.get_obs(new_state) - self.get_obs(state)),
-                jax.lax.stop_gradient(new_state),
+        return (self.get_obs(new_state),
+                self.get_obs(new_state) - self.get_obs(state),
+                new_state,
                 reward,
                 done,
                 {})
 
     def _physics_step(self, qpos: chex.Array, qvel: chex.Array, ctrl: chex.Array) -> Tuple[chex.Array, chex.Array]:
-        """Holds the control for frame_skip MuJoCo timesteps, as Gymnasium's do_simulation"""
+        """Holds the control for frame_skip MuJoCo timesteps"""
         data = self.mjx_data.replace(qpos=qpos.astype(self.mjx_data.qpos.dtype),
                                      qvel=qvel.astype(self.mjx_data.qvel.dtype),
                                      ctrl=ctrl.astype(self.mjx_data.ctrl.dtype))
         data = jax.lax.fori_loop(0, self.frame_skip, lambda _, d: self.mjx.step(self.mjx_model, d), data)
+
         return data.qpos, data.qvel
 
     def reset_env(self, params: EnvParams, key: chex.PRNGKey) -> Tuple[chex.Array, EnvState]:
@@ -161,6 +161,7 @@ class HopperCSCA(base_env.BaseEnvironment):
     def is_healthy(self, state: EnvState, params: EnvParams) -> chex.Array:
         z, angle = state.qpos[1], state.qpos[2]
         rest = jnp.concatenate((state.qpos[2:], state.qvel))
+
         return ((params.healthy_z_low < z) & (z < params.healthy_z_high) &
                 (jnp.abs(angle) < params.healthy_angle) &
                 jnp.all(jnp.abs(rest) < params.healthy_state_max))
@@ -191,6 +192,7 @@ class HopperCSCA(base_env.BaseEnvironment):
 
     def get_obs(self, state: EnvState, key: chex.PRNGKey = None) -> chex.Array:
         pitch = ((state.qpos[2] + jnp.pi) % (2 * jnp.pi)) - jnp.pi
+
         return jnp.concatenate((state.qpos[1:2],
                                 pitch[None],
                                 state.qpos[3:],
@@ -243,6 +245,7 @@ class HopperCSCA(base_env.BaseEnvironment):
                                        frames=len(frames),
                                        interval=self.dt * 1000,
                                        blit=False)
+
         anim.save(f"{file_path}_{self.name}.gif")
         plt.close()
 
