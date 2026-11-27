@@ -4,6 +4,5 @@ from bifurcagym.envs.continuous_time_chaos import (arnold_beltrami_childress_flo
                                                    double_gyre_flow,
                                                    kuramoto_sivashinsky,
                                                    lorenz63,
-                                                   quadruple_gyre_flow,
                                                    rossler,
                                                    )

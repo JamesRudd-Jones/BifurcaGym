@@ -25,10 +25,22 @@ class EnvParams:
 
 
 class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
+    """
+    A swimmer in the time periodic double gyre (Shadden, Lekien and Marsden 2005) on [0, 2] x [0, n_gyre_rows].
 
-    def __init__(self, lipschitz_reward: bool = False, random_start: bool = False, **env_kwargs):
+    The stream function's sin(pi y) factor makes each unit of height another row of two counter-rotating gyres, so
+    n_gyre_rows = 1 is the classic double gyre, 2 the quadruple gyre (previously QuadrupleGyreFlow-v0) and 3 six gyres.
+    Gyre counts are even because the oscillating boundary f(x, t) only fits the [0, 2] window: tiling it in x gives
+    mismatched slopes at the seams, and so a discontinuous v, whenever epsilon is not 0.
+    """
+
+    def __init__(self, n_gyre_rows: int = 1, lipschitz_reward: bool = False, random_start: bool = False,
+                 **env_kwargs):
         super().__init__(**env_kwargs)
+        if not isinstance(n_gyre_rows, int) or n_gyre_rows < 1:
+            raise ValueError(f"n_gyre_rows must be a positive integer, got {n_gyre_rows!r}")
 
+        self.n_gyre_rows: int = n_gyre_rows
         self.lipschitz_reward: bool = lipschitz_reward
         self.random_start: bool = random_start
         self.start_exclusion: float = 0.3
@@ -49,8 +61,8 @@ class DoubleGyreFlowCSCA(base_env.BaseEnvironment):
         self.requires_float64: bool = True
 
         self.x_bounds: chex.Array = jnp.array((0.0, 2.0))
-        self.y_bounds: chex.Array = jnp.array((0.0, 1.0))
-        self.goal_state: chex.Array = jnp.array((1.8, 0.8))
+        self.y_bounds: chex.Array = jnp.array((0.0, float(n_gyre_rows)))
+        self.goal_state: chex.Array = jnp.array((1.8, n_gyre_rows - 0.2))  # top right gyre, as in both original envs
 
     @property
     def default_params(self) -> EnvParams:
